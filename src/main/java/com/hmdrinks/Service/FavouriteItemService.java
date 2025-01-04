@@ -64,7 +64,8 @@ public class FavouriteItemService {
         {
             return ResponseEntity.status(HttpStatus.NOT_FOUND_404).body("Favourite not found");
         }
-        FavouriteItem favouriteItem1 = favouriteItemRepository.findByProductVariants_VarIdAndProductVariants_SizeAndFavourite_FavId(req.getFavId(),req.getSize(),req.getFavId());
+        ProductVariants productVariants1 = productVariantsRepository.findBySizeAndProduct_ProIdAndIsDeletedFalse(req.getSize(),req.getProId());
+        FavouriteItem favouriteItem1 = favouriteItemRepository.findByProductVariants_VarIdAndProductVariants_SizeAndFavourite_FavId(productVariants1.getVarId(),req.getSize(),req.getFavId());
         FavouriteItem favouriteItem = new FavouriteItem();
         if(favouriteItem1 == null)
         {
