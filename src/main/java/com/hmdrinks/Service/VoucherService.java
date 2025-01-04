@@ -120,7 +120,7 @@ public class VoucherService {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body("End date must be greater than or equal to post creation date");
             }
-            if (req.getNumber() <= 0)
+            if (req.getNumber() < 0)
             {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Number must be greater than 0");
             }

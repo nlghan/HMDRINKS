@@ -43,13 +43,13 @@ public class PaymentService {
     private static final String clientId = "0e21da23-8871-45ef-8624-694417cf10eb";
     private static final String apiKey = "0ad492a1-cf68-446e-901d-d282171cbdd9";
     private static final String checksumKey = "465b9e56baff7a17688d4867b9ad117f9f0ccc95732f18971f9e94b72ffe9a2e";
-    private static  final String webhookUrl = "https://cff4-171-232-181-39.ngrok-free.app/intermediary-page";
+    private static  final String webhookUrl = "https://508a-116-102-44-69.ngrok-free.app/intermediary-page";
 
     //momo
     private final String accessKey = "F8BBA842ECF85";
     private final String secretKey = "K951B6PE1waDMi640xX08PD3vg6EkVlz";
     private final String partnerCode = "MOMO";
-    private final String redirectUrl = "https://cff4-171-232-181-39.ngrok-free.app/intermediary-page";
+    private final String redirectUrl = "https://5e38-2402-800-639a-2a8e-68c4-e18a-a62a-1bcf.ngrok-free.app/intermediary-page";
     private final String ipnUrl = "https://rightly-poetic-amoeba.ngrok-free.app/api/payment/callback";
     private final String requestType = "payWithMethod";
     private final boolean autoCapture = true;
@@ -1588,7 +1588,7 @@ public class PaymentService {
             {
                 if(orders1.getStatus() == Status_Order.WAITING || (orders1.getStatus() == Status_Order.CONFIRMED && orders1.getPayment() == null))
                 {
-                    if(orders1.getDateDeleted().plusMinutes(20).isBefore(LocalDateTime.now()))
+                    if(orders1.getDateCreated().plusMinutes(20).isBefore(LocalDateTime.now()))
                     {
                               orders1.setDateCanceled(LocalDateTime.now());
                               orders1.setStatus(Status_Order.CONFIRMED);

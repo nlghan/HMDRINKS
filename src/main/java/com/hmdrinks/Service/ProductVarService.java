@@ -1,19 +1,15 @@
 package com.hmdrinks.Service;
 
-import com.hmdrinks.Entity.Category;
-import com.hmdrinks.Entity.PriceHistory;
-import com.hmdrinks.Entity.Product;
-import com.hmdrinks.Entity.ProductVariants;
+import com.hmdrinks.Entity.*;
+import com.hmdrinks.Enum.Status_Cart;
 import com.hmdrinks.Exception.BadRequestException;
-import com.hmdrinks.Repository.CategoryRepository;
-import com.hmdrinks.Repository.PriceHistoryRepository;
-import com.hmdrinks.Repository.ProductRepository;
-import com.hmdrinks.Repository.ProductVariantsRepository;
+import com.hmdrinks.Repository.*;
 import com.hmdrinks.Request.CRUDProductReq;
 import com.hmdrinks.Request.CRUDProductVarReq;
 import com.hmdrinks.Request.CreateProductReq;
 import com.hmdrinks.Request.CreateProductVarReq;
 import com.hmdrinks.Response.*;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,6 +31,10 @@ public class ProductVarService {
     private ProductVariantsRepository proVarRepository;
     @Autowired
     private PriceHistoryRepository priceHistoryRepository;
+    @Autowired
+    private CartItemRepository cartItemRepository;
+    @Autowired
+    private CartRepository cartRepository;
 
     public ResponseEntity<?> crateProductVariants(CreateProductVarReq req)
     {
@@ -98,6 +98,7 @@ public class ProductVarService {
         ));
     }
 
+    @Transactional
     public ResponseEntity<?> updateProduct(CRUDProductVarReq req)
     {
         Product product= productRepository.findByProId(req.getProId());
@@ -139,6 +140,34 @@ public class ProductVarService {
         productVariants1.setPrice(req.getPrice());
         productVariants1.setDateUpdated(LocalDateTime.now());
         proVarRepository.save(productVariants1);
+        if(req.getStock() == 0)
+        {
+            List<CartItem> cartItemList = cartItemRepository.findByProductVariants_VarId(productVariants1.getVarId());
+            for(CartItem cartItem : cartItemList)
+            {
+                Cart cart = cartItem.getCart();
+                if(cart.getStatus() ==  Status_Cart.NEW || cart.getStatus() == Status_Cart.RESTORE)
+                {
+                    cartItem.setIsDeleted(true);
+                    cartItem.setDateDeleted(LocalDateTime.now());
+                    cartItem.setNote("Update quantity product value 0");
+                    cartItem.setQuantity(0);
+                    cartItem.setTotalPrice(0.0);
+                    cartItemRepository.save(cartItem);
+                }
+                List<CartItem> cartItems = cart.getCartItems();
+                int quantity = 0;
+                double totalPrice = 0.0;
+                for(CartItem cartItem1 : cartItems)
+                {
+                    quantity += cartItem1.getQuantity();
+                    totalPrice += cartItem1.getTotalPrice();
+                }
+                cart.setTotalProduct(quantity);
+                cart.setTotalPrice(totalPrice);
+                cartRepository.save(cart);
+            }
+        }
         return ResponseEntity.status(HttpStatus.OK).body(new  CRUDProductVarResponse(
                 productVariants1.getVarId(),
                 productVariants1.getProduct().getProId(),

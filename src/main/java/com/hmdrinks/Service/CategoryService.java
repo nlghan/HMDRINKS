@@ -87,7 +87,7 @@ public class CategoryService {
 
     public ResponseEntity<?> updateCategory(CRUDCategoryRequest req)
     {
-        Category category = categoryRepository.findByCateId(req.getCateId());
+        Category category = categoryRepository.findByCateIdAndIsDeletedFalse(req.getCateId());
         if(category == null)
         {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("category not found");
