@@ -893,77 +893,188 @@ public class ProductService {
         return ResponseEntity.status(HttpStatus.OK).body("Reset success");
     }
 
+//    @Transactional
+//    public ResponseEntity<?> disableProduct(int proId){
+//        Product product = productRepository.findByProId(proId);
+//        if(product == null)
+//        {
+//            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Product not found");
+//        }
+//        if(product.getIsDeleted()){
+//            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Product is deleted");
+//        }
+//        List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProId(product.getProId());
+//        for(ProductVariants productVariant: productVariants)
+//        {
+//            productVariant.setIsDeleted(true);
+//            productVariant.setDateDeleted(LocalDateTime.now());
+//            productVariantsRepository.save(productVariant);
+//            List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariants_VarId(productVariant.getVarId());
+//            for(FavouriteItem favouriteItem: favouriteItems)
+//            {
+//                favouriteItem.setIsDeleted(true);
+//                favouriteItem.setDateDeleted(LocalDateTime.now());
+//                favouriteItemRepository.save(favouriteItem);
+//            }
+//            List<CartItem> cartItems = cartItemRepository.findByProductVariants_VarId(productVariant.getVarId());
+//            for(CartItem cartItem : cartItems)
+//            {
+//                cartItem.setIsDeleted(true);
+//                cartItem.setDateDeleted(LocalDateTime.now());
+//                cartItemRepository.save(cartItem);
+//            }
+//            List<Cart> carts = cartRepository.findAll();
+//            for(Cart cart : carts){
+//                List<CartItem> cartItems1 = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
+//                double total = 0.0 ;
+//                int quantity = 0;
+//                for(CartItem cartItem1 : cartItems1)
+//                {
+//                    total += cartItem1.getTotalPrice();
+//                    quantity += cartItem1.getQuantity();
+//                }
+//                cart.setTotalPrice(total);
+//                cart.setTotalProduct(quantity);
+//
+//                cartRepository.save(cart);
+//            }
+//        }
+//        List<Review> reviewList = reviewRepository.findAllByProduct_ProId(product.getProId());
+//        for(Review review : reviewList)
+//        {
+//            review.setIsDeleted(true);
+//            review.setDateDeleted(LocalDateTime.now());
+//            reviewRepository.save(review);
+//        }
+//        product.setIsDeleted(true);
+//        product.setDateDeleted(LocalDateTime.now());
+//        productRepository.save(product);
+//        List<ProductImageResponse> productImageResponses = new ArrayList<>();
+//        String currentProImg = product.getListProImg();
+//        if(currentProImg != null && !currentProImg.trim().isEmpty())
+//        {
+//            String[] imageEntries1 = currentProImg.split(", ");
+//            for (String imageEntry : imageEntries1) {
+//                String[] parts = imageEntry.split(": ");
+//                int stt = Integer.parseInt(parts[0]);
+//                String url = parts[1];
+//                productImageResponses.add(new ProductImageResponse(stt, url));
+//            }
+//        }
+//        List<CRUDProductVarResponse> variantResponses = Optional.ofNullable(product.getProductVariants())
+//                .orElse(Collections.emptyList()) // Trả về danh sách rỗng nếu là null
+//                .stream()
+//                .map(variant -> new CRUDProductVarResponse(
+//                        variant.getVarId(),
+//                        variant.getProduct().getProId(),
+//                        variant.getSize(),
+//                        variant.getPrice(),
+//                        variant.getStock(),
+//                        variant.getIsDeleted(),
+//                        variant.getDateDeleted(),
+//                        variant.getDateCreated(),
+//                        variant.getDateUpdated()
+//                ))
+//                .toList();
+//
+//        return ResponseEntity.status(HttpStatus.OK).body( new CRUDProductResponse(
+//                product.getProId(),
+//                product.getCategory().getCateId(),
+//                product.getProName(),
+//                productImageResponses,
+//                product.getDescription(),
+//                product.getIsDeleted(),
+//                product.getDateDeleted(),
+//                product.getDateCreated(),
+//                product.getDateUpdated(),
+//                variantResponses
+//        ));
+//    }
+
     @Transactional
-    public ResponseEntity<?> disableProduct(int proId){
+    public ResponseEntity<?> disableProduct(int proId) {
         Product product = productRepository.findByProId(proId);
-        if(product == null)
-        {
+        if (product == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Product not found");
         }
-        if(product.getIsDeleted()){
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Product is deleted");
+        if (product.getIsDeleted()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Product is already deleted");
         }
-        List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProId(product.getProId());
-        for(ProductVariants productVariant: productVariants)
-        {
-            productVariant.setIsDeleted(true);
-            productVariant.setDateDeleted(LocalDateTime.now());
-            productVariantsRepository.save(productVariant);
-            List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariants_VarId(productVariant.getVarId());
-            for(FavouriteItem favouriteItem: favouriteItems)
-            {
-                favouriteItem.setIsDeleted(true);
-                favouriteItem.setDateDeleted(LocalDateTime.now());
-                favouriteItemRepository.save(favouriteItem);
-            }
-            List<CartItem> cartItems = cartItemRepository.findByProductVariants_VarId(productVariant.getVarId());
-            for(CartItem cartItem : cartItems)
-            {
-                cartItem.setIsDeleted(true);
-                cartItem.setDateDeleted(LocalDateTime.now());
-                cartItemRepository.save(cartItem);
-            }
-            List<Cart> carts = cartRepository.findAll();
-            for(Cart cart : carts){
-                List<CartItem> cartItems1 = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
-                double total = 0.0 ;
-                int quantity = 0;
-                for(CartItem cartItem1 : cartItems1)
-                {
-                    total += cartItem1.getTotalPrice();
-                    quantity += cartItem1.getQuantity();
-                }
-                cart.setTotalPrice(total);
-                cart.setTotalProduct(quantity);
 
-                cartRepository.save(cart);
+        LocalDateTime now = LocalDateTime.now();
+
+        // Batch update ProductVariants
+        List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProId(product.getProId());
+        if (!productVariants.isEmpty()) {
+            productVariants.forEach(variant -> {
+                variant.setIsDeleted(true);
+                variant.setDateDeleted(now);
+            });
+            productVariantsRepository.saveAll(productVariants);
+
+            // Batch update FavouriteItems
+            List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariantsIn(productVariants);
+            if (!favouriteItems.isEmpty()) {
+                favouriteItems.forEach(item -> {
+                    item.setIsDeleted(true);
+                    item.setDateDeleted(now);
+                });
+                favouriteItemRepository.saveAll(favouriteItems);
+            }
+
+            // Batch update CartItems
+            List<CartItem> cartItems = cartItemRepository.findByProductVariantsIn(productVariants);
+            if (!cartItems.isEmpty()) {
+                cartItems.forEach(item -> {
+                    item.setIsDeleted(true);
+                    item.setDateDeleted(now);
+                });
+                cartItemRepository.saveAll(cartItems);
             }
         }
-        List<Review> reviewList = reviewRepository.findAllByProduct_ProId(product.getProId());
-        for(Review review : reviewList)
-        {
-            review.setIsDeleted(true);
-            review.setDateDeleted(LocalDateTime.now());
-            reviewRepository.save(review);
+
+        // Batch update Cart totals
+        List<Cart> carts = cartRepository.findAll();
+        carts.forEach(cart -> {
+            List<CartItem> activeCartItems = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
+            double total = activeCartItems.stream().mapToDouble(CartItem::getTotalPrice).sum();
+            int quantity = activeCartItems.stream().mapToInt(CartItem::getQuantity).sum();
+
+            cart.setTotalPrice(total);
+            cart.setTotalProduct(quantity);
+        });
+        cartRepository.saveAll(carts);
+
+        // Batch update Reviews
+        List<Review> reviews = reviewRepository.findAllByProduct_ProId(product.getProId());
+        if (!reviews.isEmpty()) {
+            reviews.forEach(review -> {
+                review.setIsDeleted(true);
+                review.setDateDeleted(now);
+            });
+            reviewRepository.saveAll(reviews);
         }
+
+        // Update product itself
         product.setIsDeleted(true);
-        product.setDateDeleted(LocalDateTime.now());
+        product.setDateDeleted(now);
         productRepository.save(product);
+
+        // Process product images
         List<ProductImageResponse> productImageResponses = new ArrayList<>();
         String currentProImg = product.getListProImg();
-        if(currentProImg != null && !currentProImg.trim().isEmpty())
-        {
-            String[] imageEntries1 = currentProImg.split(", ");
-            for (String imageEntry : imageEntries1) {
+        if (currentProImg != null && !currentProImg.trim().isEmpty()) {
+            String[] imageEntries = currentProImg.split(", ");
+            for (String imageEntry : imageEntries) {
                 String[] parts = imageEntry.split(": ");
                 int stt = Integer.parseInt(parts[0]);
                 String url = parts[1];
                 productImageResponses.add(new ProductImageResponse(stt, url));
             }
         }
-        List<CRUDProductVarResponse> variantResponses = Optional.ofNullable(product.getProductVariants())
-                .orElse(Collections.emptyList()) // Trả về danh sách rỗng nếu là null
-                .stream()
+
+        // Prepare variant responses
+        List<CRUDProductVarResponse> variantResponses = productVariants.stream()
                 .map(variant -> new CRUDProductVarResponse(
                         variant.getVarId(),
                         variant.getProduct().getProId(),
@@ -977,7 +1088,8 @@ public class ProductService {
                 ))
                 .toList();
 
-        return ResponseEntity.status(HttpStatus.OK).body( new CRUDProductResponse(
+        // Return response
+        return ResponseEntity.status(HttpStatus.OK).body(new CRUDProductResponse(
                 product.getProId(),
                 product.getCategory().getCateId(),
                 product.getProName(),
@@ -991,77 +1103,91 @@ public class ProductService {
         ));
     }
 
+
+
+
     @Transactional
-    public ResponseEntity<?> enableProduct(int proId){
+    public ResponseEntity<?> enableProduct(int proId) {
         Product product = productRepository.findByProId(proId);
-        if(product == null)
-        {
+        if (product == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Product not found");
         }
-        if(!product.getIsDeleted()){
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Product is enable");
+        if (!product.getIsDeleted()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Product is already enabled");
         }
-        List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProId(product.getProId());
-        for(ProductVariants productVariant: productVariants)
-        {
-            productVariant.setIsDeleted(false);
-            productVariant.setDateDeleted(null);
-            productVariantsRepository.save(productVariant);
-            List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariants_VarId(productVariant.getVarId());
-            for(FavouriteItem favouriteItem: favouriteItems)
-            {
-                favouriteItem.setIsDeleted(false);
-                favouriteItem.setDateDeleted(null);
-                favouriteItemRepository.save(favouriteItem);
-            }
-            List<CartItem> cartItems = cartItemRepository.findByProductVariants_VarId(productVariant.getVarId());
-            for(CartItem cartItem : cartItems)
-            {
-                cartItem.setIsDeleted(false);
-                cartItem.setDateDeleted(null);
-                cartItemRepository.save(cartItem);
-            }
-            List<Cart> carts = cartRepository.findAll();
-            for(Cart cart : carts){
-                List<CartItem> cartItems1 = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
-                double total = 0.0 ;
-                int quantity = 0;
-                for(CartItem cartItem1 : cartItems1)
-                {
-                    total += cartItem1.getTotalPrice();
-                    quantity += cartItem1.getQuantity();
-                }
-                cart.setTotalPrice(total);
-                cart.setTotalProduct(quantity);
 
-                cartRepository.save(cart);
+        // Batch update ProductVariants
+        List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProId(product.getProId());
+        if (!productVariants.isEmpty()) {
+            productVariants.forEach(variant -> {
+                variant.setIsDeleted(false);
+                variant.setDateDeleted(null);
+            });
+            productVariantsRepository.saveAll(productVariants);
+
+            // Batch update FavouriteItems
+            List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariantsIn(productVariants);
+            if (!favouriteItems.isEmpty()) {
+                favouriteItems.forEach(item -> {
+                    item.setIsDeleted(false);
+                    item.setDateDeleted(null);
+                });
+                favouriteItemRepository.saveAll(favouriteItems);
+            }
+
+            // Batch update CartItems
+            List<CartItem> cartItems = cartItemRepository.findByProductVariantsIn(productVariants);
+            if (!cartItems.isEmpty()) {
+                cartItems.forEach(item -> {
+                    item.setIsDeleted(false);
+                    item.setDateDeleted(null);
+                });
+                cartItemRepository.saveAll(cartItems);
             }
         }
-        List<Review> reviewList = reviewRepository.findAllByProduct_ProId(product.getProId());
-        for(Review review : reviewList)
-        {
-            review.setIsDeleted(false);
-            review.setDateDeleted(null);
-            reviewRepository.save(review);
+
+        // Recalculate Cart totals
+        List<Cart> carts = cartRepository.findAll();
+        carts.forEach(cart -> {
+            List<CartItem> activeCartItems = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
+            double total = activeCartItems.stream().mapToDouble(CartItem::getTotalPrice).sum();
+            int quantity = activeCartItems.stream().mapToInt(CartItem::getQuantity).sum();
+
+            cart.setTotalPrice(total);
+            cart.setTotalProduct(quantity);
+        });
+        cartRepository.saveAll(carts);
+
+        // Batch update Reviews
+        List<Review> reviews = reviewRepository.findAllByProduct_ProId(product.getProId());
+        if (!reviews.isEmpty()) {
+            reviews.forEach(review -> {
+                review.setIsDeleted(false);
+                review.setDateDeleted(null);
+            });
+            reviewRepository.saveAll(reviews);
         }
+
+        // Update product itself
         product.setIsDeleted(false);
         product.setDateDeleted(null);
         productRepository.save(product);
+
+        // Process product images
         List<ProductImageResponse> productImageResponses = new ArrayList<>();
         String currentProImg = product.getListProImg();
-        if(currentProImg != null && !currentProImg.trim().isEmpty())
-        {
-            String[] imageEntries1 = currentProImg.split(", ");
-            for (String imageEntry : imageEntries1) {
+        if (currentProImg != null && !currentProImg.trim().isEmpty()) {
+            String[] imageEntries = currentProImg.split(", ");
+            for (String imageEntry : imageEntries) {
                 String[] parts = imageEntry.split(": ");
                 int stt = Integer.parseInt(parts[0]);
                 String url = parts[1];
                 productImageResponses.add(new ProductImageResponse(stt, url));
             }
         }
-        List<CRUDProductVarResponse> variantResponses = Optional.ofNullable(product.getProductVariants())
-                .orElse(Collections.emptyList()) // Trả về danh sách rỗng nếu là null
-                .stream()
+
+        // Prepare variant responses
+        List<CRUDProductVarResponse> variantResponses = productVariants.stream()
                 .map(variant -> new CRUDProductVarResponse(
                         variant.getVarId(),
                         variant.getProduct().getProId(),
@@ -1075,7 +1201,8 @@ public class ProductService {
                 ))
                 .toList();
 
-        return ResponseEntity.status(HttpStatus.OK).body( new CRUDProductResponse(
+        // Return response
+        return ResponseEntity.status(HttpStatus.OK).body(new CRUDProductResponse(
                 product.getProId(),
                 product.getCategory().getCateId(),
                 product.getProName(),
@@ -1088,6 +1215,108 @@ public class ProductService {
                 variantResponses
         ));
     }
+
+
+
+
+//    @Transactional
+//    public ResponseEntity<?> enableProduct(int proId){
+//        Product product = productRepository.findByProId(proId);
+//        if(product == null)
+//        {
+//            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Product not found");
+//        }
+//        if(!product.getIsDeleted()){
+//            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Product is enable");
+//        }
+//        List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProId(product.getProId());
+//        for(ProductVariants productVariant: productVariants)
+//        {
+//            productVariant.setIsDeleted(false);
+//            productVariant.setDateDeleted(null);
+//            productVariantsRepository.save(productVariant);
+//            List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariants_VarId(productVariant.getVarId());
+//            for(FavouriteItem favouriteItem: favouriteItems)
+//            {
+//                favouriteItem.setIsDeleted(false);
+//                favouriteItem.setDateDeleted(null);
+//                favouriteItemRepository.save(favouriteItem);
+//            }
+//            List<CartItem> cartItems = cartItemRepository.findByProductVariants_VarId(productVariant.getVarId());
+//            for(CartItem cartItem : cartItems)
+//            {
+//                cartItem.setIsDeleted(false);
+//                cartItem.setDateDeleted(null);
+//                cartItemRepository.save(cartItem);
+//            }
+//            List<Cart> carts = cartRepository.findAll();
+//            for(Cart cart : carts){
+//                List<CartItem> cartItems1 = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
+//                double total = 0.0 ;
+//                int quantity = 0;
+//                for(CartItem cartItem1 : cartItems1)
+//                {
+//                    total += cartItem1.getTotalPrice();
+//                    quantity += cartItem1.getQuantity();
+//                }
+//                cart.setTotalPrice(total);
+//                cart.setTotalProduct(quantity);
+//
+//                cartRepository.save(cart);
+//            }
+//        }
+//        List<Review> reviewList = reviewRepository.findAllByProduct_ProId(product.getProId());
+//        for(Review review : reviewList)
+//        {
+//            review.setIsDeleted(false);
+//            review.setDateDeleted(null);
+//            reviewRepository.save(review);
+//        }
+//        product.setIsDeleted(false);
+//        product.setDateDeleted(null);
+//        productRepository.save(product);
+//        List<ProductImageResponse> productImageResponses = new ArrayList<>();
+//        String currentProImg = product.getListProImg();
+//        if(currentProImg != null && !currentProImg.trim().isEmpty())
+//        {
+//            String[] imageEntries1 = currentProImg.split(", ");
+//            for (String imageEntry : imageEntries1) {
+//                String[] parts = imageEntry.split(": ");
+//                int stt = Integer.parseInt(parts[0]);
+//                String url = parts[1];
+//                productImageResponses.add(new ProductImageResponse(stt, url));
+//            }
+//        }
+//        List<CRUDProductVarResponse> variantResponses = Optional.ofNullable(product.getProductVariants())
+//                .orElse(Collections.emptyList()) // Trả về danh sách rỗng nếu là null
+//                .stream()
+//                .map(variant -> new CRUDProductVarResponse(
+//                        variant.getVarId(),
+//                        variant.getProduct().getProId(),
+//                        variant.getSize(),
+//                        variant.getPrice(),
+//                        variant.getStock(),
+//                        variant.getIsDeleted(),
+//                        variant.getDateDeleted(),
+//                        variant.getDateCreated(),
+//                        variant.getDateUpdated()
+//                ))
+//                .toList();
+//
+//        return ResponseEntity.status(HttpStatus.OK).body( new CRUDProductResponse(
+//                product.getProId(),
+//                product.getCategory().getCateId(),
+//                product.getProName(),
+//                productImageResponses,
+//                product.getDescription(),
+//                product.getIsDeleted(),
+//                product.getDateDeleted(),
+//                product.getDateCreated(),
+//                product.getDateUpdated(),
+//                variantResponses
+//        ));
+//    }
+
     @Transactional
     public ResponseEntity<?> listProductsWithAverageRating(String pageFromParam, String limitFromParam) {
         int page = Integer.parseInt(pageFromParam);

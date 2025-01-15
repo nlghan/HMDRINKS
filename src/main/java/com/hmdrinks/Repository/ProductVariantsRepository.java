@@ -46,4 +46,6 @@ public interface ProductVariantsRepository extends JpaRepository<ProductVariants
 
     @Query(value = "SELECT COUNT(var_id) FROM product_variants", nativeQuery = true)
     int TotalNumberOfProductVariants();
+
+    List<ProductVariants> findByProduct_ProIdIn(List<Integer> productIds);
 }

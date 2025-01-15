@@ -20,4 +20,6 @@ public interface ReviewRepository extends JpaRepository<Review,Integer> {
   List<Review> findAllByProduct_ProId(int proId);
   Review findByReviewIdAndIsDeletedFalse(Integer reviewId);
   Review findByReviewIdAndUser_UserIdAndIsDeletedFalse(Integer reviewId, Integer userId);
+
+    List<Review> findAllByProduct_ProIdIn(List<Integer> productIds);
 }
