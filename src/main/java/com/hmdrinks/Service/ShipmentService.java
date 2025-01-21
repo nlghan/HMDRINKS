@@ -49,63 +49,69 @@ public class ShipmentService {
     private ProductVariantsRepository productVariantsRepository;
     @Autowired
     private ShipmentRepository shipmentRepository;
+    @Autowired
+    private NotificationService notificationService;
 
     @Transactional
-    public ResponseEntity<?> shipmentAllocation(CRUDShipmentReq req)
-    {
-       Shippment shippment = shipmentRepository.findByShipmentIdAndIsDeletedFalse(req.getShipmentId());
-       if(shippment == null)
-            {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Shipment Not Found");
-            }
-       User user = userRepository.findByUserIdAndIsDeletedFalse(req.getUserId());
-       if(user == null)
-       {
-           return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User Not Found");
-       }
-       if(user.getRole() != Role.SHIPPER)
-       {
-           return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("User is not shipper");
-       }
-       shippment.setDateDelivered(req.getDateDeliver());
-       shippment.setDateShip(req.getDateShip());
-       shippment.setUser(user);
-       shipmentRepository.save(shippment);
+    public ResponseEntity<?> shipmentAllocation(CRUDShipmentReq req) {
+        Shippment shippment = shipmentRepository.findByShipmentIdAndIsDeletedFalse(req.getShipmentId());
+        if (shippment == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Shipment Not Found");
+        }
+        User user = userRepository.findByUserIdAndIsDeletedFalse(req.getUserId());
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User Not Found");
+        }
+        if (user.getRole() != Role.SHIPPER) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("User is not shipper");
+        }
+        shippment.setDateDelivered(req.getDateDeliver());
+        shippment.setDateShip(req.getDateShip());
+        shippment.setUser(user);
+        shipmentRepository.save(shippment);
 
-       Payment payment = paymentRepository.findByPaymentId(shippment.getPayment().getPaymentId());
-       if(payment.getIsDeleted())
-       {
-           return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Payment is deleted");
-       }
-       Orders orders = orderRepository.findByOrderId(payment.getOrder().getOrderId());
-       if(orders.getIsDeleted()){
-           return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Order is deleted");
-       }
+        Payment payment = paymentRepository.findByPaymentId(shippment.getPayment().getPaymentId());
+        if (payment.getIsDeleted()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Payment is deleted");
+        }
+        Orders orders = orderRepository.findByOrderId(payment.getOrder().getOrderId());
+        if (orders.getIsDeleted()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Order is deleted");
+        }
 
-       User customer = userRepository.findByUserIdAndIsDeletedFalse(orders.getUser().getUserId());
-       if(customer == null)
-       {
-           return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Customer Not Found");
-       }
-       User shipper = shippment.getUser();
-       return  ResponseEntity.status(HttpStatus.OK).body(new CRUDShipmentResponse(
-               shippment.getShipmentId(),
-               shippment.getUser() != null ? shippment.getUser().getFullName() : null,
-               shippment.getDateCreated(),
-               shippment.getDateDeleted(),
-               shippment.getDateDelivered(),
-               shippment.getDateShip(),
-               shippment.getDateCancel(),
-               shippment.getIsDeleted(),
-               shippment.getStatus(),
-               shippment.getPayment().getPaymentId(),
-               shippment.getUser() != null ? shippment.getUser().getUserId() : null,
-               customer.getFullName(),
-               orders.getAddress(),
-               customer.getPhoneNumber(),
-               customer.getEmail(),
-               orders.getOrderId()
-       ));
+        User customer = userRepository.findByUserIdAndIsDeletedFalse(orders.getUser().getUserId());
+        if (customer == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Customer Not Found");
+        }
+
+        // Gửi thông báo đến shipper
+        try {
+            String message = "Có đơn hàng mới";
+            System.out.println("User ID: " + user.getUserId());
+            notificationService.sendNotification(23, message); // Gọi hàm gửi thông báo
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to send notification to shipper. Error: " + e.getMessage());
+        }
+
+        return ResponseEntity.status(HttpStatus.OK).body(new CRUDShipmentResponse(
+                shippment.getShipmentId(),
+                shippment.getUser() != null ? shippment.getUser().getFullName() : null,
+                shippment.getDateCreated(),
+                shippment.getDateDeleted(),
+                shippment.getDateDelivered(),
+                shippment.getDateShip(),
+                shippment.getDateCancel(),
+                shippment.getIsDeleted(),
+                shippment.getStatus(),
+                shippment.getPayment().getPaymentId(),
+                shippment.getUser() != null ? shippment.getUser().getUserId() : null,
+                customer.getFullName(),
+                orders.getAddress(),
+                customer.getPhoneNumber(),
+                customer.getEmail(),
+                orders.getOrderId()
+        ));
     }
 
     @Transactional
@@ -142,8 +148,10 @@ public class ShipmentService {
                 return  ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Stock Not Enough");
             }
         }
-        User customer = userRepository.findByUserIdAndIsDeletedFalse(orders.getUser().getUserId());
         User shipper = shippment.getUser();
+
+        User customer = userRepository.findByUserIdAndIsDeletedFalse(orders.getUser().getUserId());
+
         return ResponseEntity.status(HttpStatus.OK).body(new CRUDShipmentResponse(
                 shippment.getShipmentId(),
                 shippment.getUser() != null ? shippment.getUser().getFullName() : null,

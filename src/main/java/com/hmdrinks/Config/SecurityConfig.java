@@ -43,8 +43,8 @@ public class SecurityConfig {
                                 "/configuration/ui",
                                 "/configuration/security",
                                 "/swagger-ui/**",
-                                "/swagger-ui.html"
-
+                                "/swagger-ui.html",
+                                "/ws/**"
                         ).permitAll()
                         .requestMatchers("/api/fav-item/list").permitAll()
                         .requestMatchers("/api/product/cate/search").permitAll()
@@ -111,6 +111,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/orders/**").hasAnyAuthority("ADMIN","CUSTOMER","SHIPPER")
                         .requestMatchers("api/orders/reason-cancel").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
+                        .requestMatchers("/api/notifications/send").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exception -> exception.accessDeniedHandler(myAccessDeniedHandler))
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -126,9 +127,10 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
-        corsConfiguration.setAllowedOrigins(Arrays.asList("*"));
+        corsConfiguration.setAllowedOrigins(Arrays.asList("http://localhost:5173"));
         corsConfiguration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         corsConfiguration.setAllowedHeaders(Arrays.asList("Authorization", "content-type"));
+        corsConfiguration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", corsConfiguration);
         return source;
