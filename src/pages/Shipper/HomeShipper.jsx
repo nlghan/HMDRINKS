@@ -6,6 +6,9 @@ import NavbarShipper from '../../components/Navbar/NavbarShipper';
 import Footer from '../../components/Footer/Footer';
 import LoadingAnimation from '../../components/Animation/LoadingAnimation';
 import ErrorMessage from '../../components/Animation/ErrorMessage';
+import UseWebSocket from '../../components/Hook/UseWebSocket';
+import Swal from 'sweetalert2';
+
 import './HomeShipper.css';
 
 const HomeShipper = () => {
@@ -18,10 +21,10 @@ const HomeShipper = () => {
     const [selectedStatus, setSelectedStatus] = useState('SHIPPING');
     const [filteredData, setFilteredData] = useState([]);
     const navigate = useNavigate();
-
+    const [notifications, setNotifications] = useState([]);
     const getCookie = (name) => {
         const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`); 
+        const parts = value.split(`; ${name}=`);
         return parts.length === 2 ? parts.pop().split(';').shift() : null;
     };
 
@@ -35,21 +38,46 @@ const HomeShipper = () => {
             return null;
         }
     };
+    // Hook WebSocket
+    const token = getCookie('access_token');
+    const userIdStr = getUserIdFromToken(token);
+    console.log("User ID from token:", userIdStr);  // Kiểm tra giá trị userIdStr
+    
+    const userId = userIdStr === "null" ? null : parseInt(userIdStr, 10);
+    console.log("Parsed userId:", userId);  // Kiểm tra giá trị và kiểu dữ liệu của userId
+    
+    const socketNotifications = UseWebSocket(userId);
+    console.log("Notifications:", socketNotifications);
+
+    useEffect(() => {
+        if (socketNotifications && socketNotifications.length > 0) {
+            const newNotification = socketNotifications[socketNotifications.length - 1]; // Lấy thông báo mới nhất
+            setNotifications((prev) => [...prev, newNotification]); // Thêm vào danh sách
+            
+            // Hiển thị thông báo bằng SweetAlert2
+            Swal.fire({
+                title: 'Thông báo',
+                text: newNotification,
+                icon: 'info',
+                confirmButtonText: 'OK',
+            });
+        }
+    }, [socketNotifications]);
 
     const fetchData = async (page, status = selectedStatus) => {
         setLoading(true);
         setError(null);
-        
+
         const token = getCookie('access_token');
         if (!token) {
             setError('Vui lòng đăng nhập lại.');
             setLoading(false);
             return;
         }
-        
+
         let url = `http://localhost:1010/api/shipment/shipper/listShippment`;
         const params = { page, limit, status };
-    
+
         // Nếu trạng thái không phải là 'WAITING', thêm userId vào params
         if (status !== 'WAITING') {
             const userId = getUserIdFromToken(token);
@@ -62,7 +90,7 @@ const HomeShipper = () => {
         } else {
             url = `http://localhost:1010/api/shipment/view/listByStatus`;
         }
-        
+
         try {
             const response = await axiosInstance.get(url, {
                 params,
@@ -71,7 +99,7 @@ const HomeShipper = () => {
                     Authorization: `Bearer ${token}`,
                 },
             });
-    
+
             const { listShipment, totalPage } = response.data;
             setData(listShipment || []);
             setTotalPage(totalPage || 1);
@@ -82,14 +110,14 @@ const HomeShipper = () => {
             setLoading(false);
         }
     };
-    
-    
-    
+
+
+
     const handleStatusChange = (status) => {
         setSelectedStatus(status);
         setCurrentPage(1); // Reset to page 1 on status change
         fetchData(1, status); // Fetch data with the new status
-        window.scrollTo(0, 0); 
+        window.scrollTo(0, 0);
     };
 
     useEffect(() => {
@@ -104,7 +132,7 @@ const HomeShipper = () => {
         if (newPage > 0 && newPage <= totalPage) {
             setCurrentPage(newPage);
         }
-        window.scrollTo(0, 0); 
+        window.scrollTo(0, 0);
     };
 
     const getPaginationNumbers = () => {
@@ -130,7 +158,7 @@ const HomeShipper = () => {
             <NavbarShipper currentPage="Trang Chủ" />
             <div className="shipper-home-container">
                 <div className="side-menu-shipper">
-                <button
+                    <button
                         className={`side-menu-shipper ${selectedStatus === 'WAITING' ? 'active' : ''}`}
                         onClick={() => handleStatusChange('WAITING')}
                     >
@@ -201,7 +229,7 @@ const HomeShipper = () => {
                                         <p><strong>Số điện thoại:</strong> {shipment.phoneNumber}</p>
                                         <p><strong>Trạng thái đơn:</strong> {shipment.status}</p>
                                         <p><strong>Ngày nhận đơn:</strong> {shipment.dateCreated}</p>
-                                        
+
                                     </div>
 
                                 </li>
@@ -238,6 +266,7 @@ const HomeShipper = () => {
                         </button>
                     </div>
                 )}
+
             </div>
             <Footer />
         </>
