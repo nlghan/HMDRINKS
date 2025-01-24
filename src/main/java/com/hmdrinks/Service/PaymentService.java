@@ -79,6 +79,8 @@ public class PaymentService {
     private VNPayService vnPayService;
     @Autowired
     private SupportFunction supportFunction;
+    @Autowired
+    private NotificationService notificationService;
 
     private static Long generateRandomOrderCode() {
         Random random = new Random();
@@ -197,6 +199,8 @@ public class PaymentService {
             shipment.setStatus(Status_Shipment.SHIPPING);
             shipment.setDateDelivered(currentTime);
             shipmentRepository.save(shipment);
+            String message = "Bạn có đơn hàng mới";
+            notificationService.sendNotification(shipment.getUser().getUserId(), message);
             selectedShipper.getShippments().add(shipment);
         }
         return true;

@@ -16,16 +16,14 @@ public class NotificationService {
     }
 
     public void sendNotification(int userId, String message) {
+        System.out.println("Sending notification to user " + userId + " with message " + message);
         String destination = "/topic/shipper/" + userId;
 
-        // Kiểm tra userId hợp lệ
         if (userId <= 0) {
             System.err.println("Error: Invalid userId: " + userId);
             return;
         }
-
         try {
-            // Gửi thông báo
             messagingTemplate.convertAndSend(destination, new NotificationResponse(message));
 
             System.out.println("Notification sent successfully to: " + destination + " with message: " + message);

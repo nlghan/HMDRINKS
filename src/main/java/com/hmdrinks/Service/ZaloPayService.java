@@ -61,6 +61,8 @@ public class ZaloPayService {
     private OrderRepository orderRepository;
     @Autowired
     private UserVoucherRepository userVoucherRepository;
+    @Autowired
+    private NotificationService notificationService;
 
     public ZaloPayService(PaymentRepository paymentRepository) {
         this.paymentRepository = paymentRepository;
@@ -172,6 +174,8 @@ public class ZaloPayService {
             shipment.setStatus(Status_Shipment.SHIPPING);
             shipment.setDateDelivered(currentTime);
             shipmentRepository.save(shipment);
+            String message = "Bạn có đơn hàng mới";
+            notificationService.sendNotification(shipment.getUser().getUserId(), message);
 
             selectedShipper.getShippments().add(shipment);
         }

@@ -45,6 +45,8 @@ public class VNPayIpnHandler {
     private  VoucherRepository voucherRepository;
     @Autowired
     private  UserVoucherRepository userVoucherRepository;
+    @Autowired
+    private NotificationService notificationService;
 
     public static class VnpIpnResponseConst {
         public static final IpnResponse SUCCESS = new IpnResponse("00", "Successful","");
@@ -156,6 +158,8 @@ public class VNPayIpnHandler {
             shipment.setStatus(Status_Shipment.SHIPPING);
             shipment.setDateDelivered(currentTime);
             shipmentRepository.save(shipment);
+            String message = "Bạn có đơn hàng mới";
+            notificationService.sendNotification(shipment.getUser().getUserId(), message);
 
             selectedShipper.getShippments().add(shipment);
         }
