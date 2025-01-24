@@ -1249,25 +1249,31 @@ public class OrdersService {
         double price = 0.0;
         int quantity = 0;
         for (CartItem cartItem : cartItems) {
-            CartItem newCartItem = new CartItem();
-            newCartItem.setQuantity(cartItem.getQuantity());
-            newCartItem.setIsDeleted(false);
-            newCartItem.setProductVariants(cartItem.getProductVariants());
-            newCartItem.setCart(newCart);
-            newCartItem.setTotalPrice(newCartItem.getQuantity() * newCartItem.getProductVariants().getPrice());
-            cartItemRepository.save(newCartItem);
-            if (newCartItem.getProductVariants().getStock() == 0) {
-                newCartItem.setQuantity(0);
-                newCartItem.setTotalPrice(0);
-                cartItemRepository.save(newCartItem);
-            }
-            if (newCartItem.getProductVariants().getStock() < newCartItem.getQuantity()) {
-                newCartItem.setQuantity(1);
+
+            if(!cartItem.getProductVariants().getIsDeleted())
+            {
+                CartItem newCartItem = new CartItem();
+                newCartItem.setQuantity(cartItem.getQuantity());
+                newCartItem.setIsDeleted(false);
+                newCartItem.setProductVariants(cartItem.getProductVariants());
+                newCartItem.setCart(newCart);
                 newCartItem.setTotalPrice(newCartItem.getQuantity() * newCartItem.getProductVariants().getPrice());
                 cartItemRepository.save(newCartItem);
+
+                if (newCartItem.getProductVariants().getStock() == 0) {
+                    newCartItem.setQuantity(0);
+                    newCartItem.setTotalPrice(0);
+                    cartItemRepository.save(newCartItem);
+                }
+                if (newCartItem.getProductVariants().getStock() < newCartItem.getQuantity()) {
+                    newCartItem.setQuantity(1);
+                    newCartItem.setTotalPrice(newCartItem.getQuantity() * newCartItem.getProductVariants().getPrice());
+                    cartItemRepository.save(newCartItem);
+                }
+                quantity += newCartItem.getQuantity();
+                price += newCartItem.getQuantity() * newCartItem.getProductVariants().getPrice();
             }
-            quantity += newCartItem.getQuantity();
-            price += newCartItem.getQuantity() * newCartItem.getProductVariants().getPrice();
+
         }
         newCart.setTotalPrice(price);
         newCart.setTotalProduct(quantity);

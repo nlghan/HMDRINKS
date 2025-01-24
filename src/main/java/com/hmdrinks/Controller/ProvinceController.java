@@ -29,6 +29,6 @@ public class ProvinceController {
 
     @GetMapping("/list-ward")
     public  ResponseEntity<?> getAllWard(@RequestParam Integer districtId){
-        return provinceService.fetchWard(districtId.toString());
+        return provinceService.fetchWard1(districtId.toString());
     }
 }

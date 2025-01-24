@@ -3,6 +3,7 @@ package com.hmdrinks.Repository;
 import com.hmdrinks.Entity.CartItem;
 import com.hmdrinks.Entity.Favourite;
 import com.hmdrinks.Entity.FavouriteItem;
+import com.hmdrinks.Entity.ProductVariants;
 import com.hmdrinks.Enum.Size;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -18,4 +19,6 @@ public interface FavouriteItemRepository extends JpaRepository<FavouriteItem,Int
     FavouriteItem findByFavItemId(int id);
 
     FavouriteItem findByProductVariants_VarIdAndProductVariants_SizeAndFavourite_FavId(Integer varId, Size size, Integer favId);
+
+    List<FavouriteItem> findByProductVariantsIn(List<ProductVariants> productVariants);
 }

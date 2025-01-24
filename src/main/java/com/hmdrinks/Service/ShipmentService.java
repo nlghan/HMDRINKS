@@ -83,12 +83,13 @@ public class ShipmentService {
         if (customer == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Customer Not Found");
         }
+        System.out.println("User ID: " + shippment.getUser().getUserId());
 
         // Gửi thông báo đến shipper
         try {
-            String message = "Có đơn hàng mới";
-            System.out.println("User ID: " + user.getUserId());
-            notificationService.sendNotification(23, message); // Gọi hàm gửi thông báo
+            String message = "Bạn có đơn hàng mới";
+            System.out.println("User ID: " + shippment.getUser().getUserId());
+            notificationService.sendNotification(shippment.getUser().getUserId(), message); // Gọi hàm gửi thông báo
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Failed to send notification to shipper. Error: " + e.getMessage());

@@ -155,4 +155,56 @@ public class ProvinceService {
         return ResponseEntity.status(HttpStatus.OK).body(new ListAllWardResponse(total,wardList));
     }
 
+    public ResponseEntity<?> fetchWard1(String districtId) {
+        String API_URL_WARD = "https://provinces.open-api.vn/api/w/";
+        List<WardResponse> wardList = new ArrayList<>();
+        int total = 0;
+
+        try {
+            // Gọi API
+            URL url = new URL(API_URL_WARD);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+
+            int responseCode = conn.getResponseCode();
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                System.err.println("Lỗi HTTP: " + responseCode + " khi gọi URL: " + url);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Lỗi khi gọi API: " + responseCode);
+            }
+
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"))) {
+                StringBuilder response = new StringBuilder();
+                String output;
+                while ((output = br.readLine()) != null) {
+                    response.append(output);
+                }
+
+                // Parse JSON response
+                JsonArray jsonResponse = JsonParser.parseString(response.toString()).getAsJsonArray();
+                for (JsonElement element : jsonResponse) {
+                    JsonObject ward = element.getAsJsonObject();
+
+                    // Lọc theo district_code
+                    if (ward.has("district_code") && districtId.equals(ward.get("district_code").getAsString())) {
+                        int wardId = ward.get("code").getAsInt();
+                        String wardName = ward.get("name").getAsString();
+
+                        wardList.add(new WardResponse(wardId, wardName));
+                        total++;
+                    }
+                }
+            }
+            conn.disconnect();
+        } catch (IOException e) {
+            System.err.println("IOException: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi kết nối hoặc đọc dữ liệu từ API.");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi xử lý dữ liệu API.");
+        }
+
+        return ResponseEntity.status(HttpStatus.OK).body(new ListAllWardResponse(total, wardList));
+    }
+
 }

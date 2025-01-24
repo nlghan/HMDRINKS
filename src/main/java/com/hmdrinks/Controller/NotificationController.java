@@ -1,6 +1,7 @@
 package com.hmdrinks.Controller;
 
 import com.hmdrinks.Request.NotificationRequest;
+import com.hmdrinks.Response.NotificationResponse;
 import com.hmdrinks.Service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -19,13 +20,13 @@ public class NotificationController {
     @PostMapping("/send")
     public ResponseEntity<?> sendNotification(@RequestBody NotificationRequest notificationRequest) {
         // Tạo thông điệp mặc định
-        String message = "Có đơn hàng mới";
+        String message = "Bạn có đơn hàng mới";
 
         // Gửi thông báo thông qua service
         notificationService.sendNotification(notificationRequest.getUserId(), message);
 
         // Trả về response với thông điệp đã gửi
-        return ResponseEntity.ok("Thông báo đã được gửi: " + message);
+        return ResponseEntity.ok(new NotificationResponse(message));
     }
 }
 

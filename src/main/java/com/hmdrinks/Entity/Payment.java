@@ -52,7 +52,7 @@ public class Payment {
     @Column(name = "date_created")
     private LocalDateTime dateCreated;
 
-    @Column(name = "link")
+    @Column(name = "link", columnDefinition = "TEXT")
     private String Link;
 
     @OneToOne(fetch = FetchType.LAZY)

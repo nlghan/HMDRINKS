@@ -87,7 +87,7 @@ public class CategoryService {
 
     public ResponseEntity<?> updateCategory(CRUDCategoryRequest req)
     {
-        Category category = categoryRepository.findByCateId(req.getCateId());
+        Category category = categoryRepository.findByCateIdAndIsDeletedFalse(req.getCateId());
         if(category == null)
         {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("category not found");
@@ -231,72 +231,90 @@ public class CategoryService {
     }
 
     @Transactional
-    public ResponseEntity<?> disableCategory(int cateId)
-    {
+    public ResponseEntity<?> disableCategory(int cateId) {
         Category category = categoryRepository.findByCateId(cateId);
-        if(category == null)
-        {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("category not found");
+        if (category == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Category not found");
         }
-        if(category.getIsDeleted())
-        {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Category already disable");
+        if (category.getIsDeleted()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Category already disabled");
         }
+
+        // Fetch all products in the category
         List<Product> productList = productRepository.findByCategory_CateId(cateId);
-        for (Product product: productList)
-        {
-            List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProId(product.getProId());
-            for(ProductVariants productVariant: productVariants)
-            {
-                productVariant.setIsDeleted(true);
-                productVariant.setDateDeleted(LocalDateTime.now());
-                productVariantsRepository.save(productVariant);
+        if (!productList.isEmpty()) {
+            // Fetch all product IDs
+            List<Integer> productIds = productList.stream()
+                    .map(Product::getProId)
+                    .toList();
 
-                List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariants_VarId(productVariant.getVarId());
-                for(FavouriteItem favouriteItem: favouriteItems)
-                {
-                    favouriteItem.setIsDeleted(true);
-                    favouriteItem.setDateDeleted(LocalDateTime.now());
-                    favouriteItemRepository.save(favouriteItem);
+            // Fetch all variants for products
+            List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProIdIn(productIds);
+            if (!productVariants.isEmpty()) {
+                // Batch update variants
+                productVariants.forEach(variant -> {
+                    variant.setIsDeleted(true);
+                    variant.setDateDeleted(LocalDateTime.now());
+                });
+                productVariantsRepository.saveAll(productVariants);
+
+                // Fetch and batch update favourite items
+                List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariantsIn(productVariants);
+                if (!favouriteItems.isEmpty()) {
+                    favouriteItems.forEach(item -> {
+                        item.setIsDeleted(true);
+                        item.setDateDeleted(LocalDateTime.now());
+                    });
+                    favouriteItemRepository.saveAll(favouriteItems);
                 }
 
-                List<CartItem> cartItems = cartItemRepository.findByProductVariants_VarId(productVariant.getVarId());
-                for(CartItem cartItem : cartItems)
-                {
-                    cartItem.setIsDeleted(true);
-                    cartItem.setDateDeleted(LocalDateTime.now());
-                    cartItemRepository.save(cartItem);
-                }
-                List<Cart> carts = cartRepository.findAll();
-                for(Cart cart : carts){
-                    List<CartItem> cartItems1 = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
-                    double total = 0.0 ;
-                    int quantity = 0;
-                    for(CartItem cartItem1 : cartItems1)
-                    {
-                        total += cartItem1.getTotalPrice();
-                        quantity += cartItem1.getQuantity();
-                    }
-                    cart.setTotalPrice(total);
-                    cart.setTotalProduct(quantity);
-
-                    cartRepository.save(cart);
+                // Fetch and batch update cart items
+                List<CartItem> cartItems = cartItemRepository.findByProductVariantsIn(productVariants);
+                if (!cartItems.isEmpty()) {
+                    cartItems.forEach(item -> {
+                        item.setIsDeleted(true);
+                        item.setDateDeleted(LocalDateTime.now());
+                    });
+                    cartItemRepository.saveAll(cartItems);
                 }
             }
-            List<Review> reviews = reviewRepository.findAllByProduct_ProId(product.getProId());
-            for(Review review: reviews)
-            {
-                review.setIsDeleted(true);
-                review.setDateDeleted(LocalDateTime.now());
-                reviewRepository.save(review);
+
+            // Recalculate cart totals
+            List<Cart> carts = cartRepository.findAll();
+            carts.forEach(cart -> {
+                List<CartItem> activeCartItems = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
+                double total = activeCartItems.stream().mapToDouble(CartItem::getTotalPrice).sum();
+                int quantity = activeCartItems.stream().mapToInt(CartItem::getQuantity).sum();
+
+                cart.setTotalPrice(total);
+                cart.setTotalProduct(quantity);
+            });
+            cartRepository.saveAll(carts);
+
+            // Batch update reviews
+            List<Review> reviews = reviewRepository.findAllByProduct_ProIdIn(productIds);
+            if (!reviews.isEmpty()) {
+                reviews.forEach(review -> {
+                    review.setIsDeleted(true);
+                    review.setDateDeleted(LocalDateTime.now());
+                });
+                reviewRepository.saveAll(reviews);
             }
-            product.setIsDeleted(true);
-            product.setDateDeleted(LocalDateTime.now());
-            productRepository.save(product);
+
+            // Batch update products
+            productList.forEach(product -> {
+                product.setIsDeleted(true);
+                product.setDateDeleted(LocalDateTime.now());
+            });
+            productRepository.saveAll(productList);
         }
+
+        // Update category
         category.setIsDeleted(true);
         category.setDateDeleted(LocalDateTime.now());
         categoryRepository.save(category);
+
+        // Return response
         return ResponseEntity.status(HttpStatus.OK).body(new CRUDCategoryResponse(
                 category.getCateId(),
                 category.getCateName(),
@@ -304,81 +322,256 @@ public class CategoryService {
                 category.getIsDeleted(),
                 category.getDateCreated(),
                 category.getDateUpdated(),
-                category.getDateDeleted()));
+                category.getDateDeleted()
+        ));
     }
 
-    @Transactional
-    public ResponseEntity<?> enableCategory(int cateId)
-    {
-        Category category = categoryRepository.findByCateId(cateId);
-        if(category == null)
-        {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("category not found");
-        }
-        if(!category.getIsDeleted())
-        {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Category already enable");
-        }
-        List<Product> productList = productRepository.findByCategory_CateId(cateId);
-        for (Product product:productList)
-        {
-            List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProId(product.getProId());
-            for(ProductVariants productVariant: productVariants)
-            {
-                productVariant.setIsDeleted(false);
-                productVariant.setDateDeleted(null);
-                productVariantsRepository.save(productVariant);
-                List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariants_VarId(productVariant.getVarId());
-                for(FavouriteItem favouriteItem: favouriteItems)
-                {
-                    favouriteItem.setIsDeleted(false);
-                    favouriteItem.setDateDeleted(null);
-                    favouriteItemRepository.save(favouriteItem);
-                }
-                List<CartItem> cartItems = cartItemRepository.findByProductVariants_VarId(productVariant.getVarId());
-                for(CartItem cartItem : cartItems)
-                {
-                    cartItem.setIsDeleted(false);
-                    cartItem.setDateDeleted(null);
-                    cartItemRepository.save(cartItem);
-                }
-                List<Cart> carts = cartRepository.findAll();
-                for(Cart cart : carts){
-                    List<CartItem> cartItems1 = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
-                    double total = 0.0 ;
-                    int quantity = 0;
-                    for(CartItem cartItem1 : cartItems1)
-                    {
-                        total += cartItem1.getTotalPrice();
-                        quantity += cartItem1.getQuantity();
-                    }
-                    cart.setTotalPrice(total);
-                    cart.setTotalProduct(quantity);
 
-                    cartRepository.save(cart);
-                }
+//    @Transactional
+//    public ResponseEntity<?> disableCategory(int cateId)
+//    {
+//        Category category = categoryRepository.findByCateId(cateId);
+//        if(category == null)
+//        {
+//            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("category not found");
+//        }
+//        if(category.getIsDeleted())
+//        {
+//            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Category already disable");
+//        }
+//        List<Product> productList = productRepository.findByCategory_CateId(cateId);
+//        for (Product product: productList)
+//        {
+//            List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProId(product.getProId());
+//            for(ProductVariants productVariant: productVariants)
+//            {
+//                productVariant.setIsDeleted(true);
+//                productVariant.setDateDeleted(LocalDateTime.now());
+//                productVariantsRepository.save(productVariant);
+//
+//                List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariants_VarId(productVariant.getVarId());
+//                for(FavouriteItem favouriteItem: favouriteItems)
+//                {
+//                    favouriteItem.setIsDeleted(true);
+//                    favouriteItem.setDateDeleted(LocalDateTime.now());
+//                    favouriteItemRepository.save(favouriteItem);
+//                }
+//
+//                List<CartItem> cartItems = cartItemRepository.findByProductVariants_VarId(productVariant.getVarId());
+//                for(CartItem cartItem : cartItems)
+//                {
+//                    cartItem.setIsDeleted(true);
+//                    cartItem.setDateDeleted(LocalDateTime.now());
+//                    cartItemRepository.save(cartItem);
+//                }
+//                List<Cart> carts = cartRepository.findAll();
+//                for(Cart cart : carts){
+//                    List<CartItem> cartItems1 = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
+//                    double total = 0.0 ;
+//                    int quantity = 0;
+//                    for(CartItem cartItem1 : cartItems1)
+//                    {
+//                        total += cartItem1.getTotalPrice();
+//                        quantity += cartItem1.getQuantity();
+//                    }
+//                    cart.setTotalPrice(total);
+//                    cart.setTotalProduct(quantity);
+//
+//                    cartRepository.save(cart);
+//                }
+//            }
+//            List<Review> reviews = reviewRepository.findAllByProduct_ProId(product.getProId());
+//            for(Review review: reviews)
+//            {
+//                review.setIsDeleted(true);
+//                review.setDateDeleted(LocalDateTime.now());
+//                reviewRepository.save(review);
+//            }
+//            product.setIsDeleted(true);
+//            product.setDateDeleted(LocalDateTime.now());
+//            productRepository.save(product);
+//        }
+//        category.setIsDeleted(true);
+//        category.setDateDeleted(LocalDateTime.now());
+//        categoryRepository.save(category);
+//        return ResponseEntity.status(HttpStatus.OK).body(new CRUDCategoryResponse(
+//                category.getCateId(),
+//                category.getCateName(),
+//                category.getCateImg(),
+//                category.getIsDeleted(),
+//                category.getDateCreated(),
+//                category.getDateUpdated(),
+//                category.getDateDeleted()));
+//    }
+
+//    @Transactional
+//    public ResponseEntity<?> enableCategory(int cateId)
+//    {
+//        Category category = categoryRepository.findByCateId(cateId);
+//        if(category == null)
+//        {
+//            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("category not found");
+//        }
+//        if(!category.getIsDeleted())
+//        {
+//            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Category already enable");
+//        }
+//        List<Product> productList = productRepository.findByCategory_CateId(cateId);
+//        for (Product product:productList)
+//        {
+//            List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProId(product.getProId());
+//            for(ProductVariants productVariant: productVariants)
+//            {
+//                productVariant.setIsDeleted(false);
+//                productVariant.setDateDeleted(null);
+//                productVariantsRepository.save(productVariant);
+//                List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariants_VarId(productVariant.getVarId());
+//                for(FavouriteItem favouriteItem: favouriteItems)
+//                {
+//                    favouriteItem.setIsDeleted(false);
+//                    favouriteItem.setDateDeleted(null);
+//                    favouriteItemRepository.save(favouriteItem);
+//                }
+//                List<CartItem> cartItems = cartItemRepository.findByProductVariants_VarId(productVariant.getVarId());
+//                for(CartItem cartItem : cartItems)
+//                {
+//                    cartItem.setIsDeleted(false);
+//                    cartItem.setDateDeleted(null);
+//                    cartItemRepository.save(cartItem);
+//                }
+//                List<Cart> carts = cartRepository.findAll();
+//                for(Cart cart : carts){
+//                    List<CartItem> cartItems1 = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
+//                    double total = 0.0 ;
+//                    int quantity = 0;
+//                    for(CartItem cartItem1 : cartItems1)
+//                    {
+//                        total += cartItem1.getTotalPrice();
+//                        quantity += cartItem1.getQuantity();
+//                    }
+//                    cart.setTotalPrice(total);
+//                    cart.setTotalProduct(quantity);
+//
+//                    cartRepository.save(cart);
+//                }
+//            }
+//            List<Review> reviews = reviewRepository.findAllByProduct_ProId(product.getProId());
+//            for(Review review: reviews)
+//            {
+//                review.setIsDeleted(false);
+//                review.setDateDeleted(null);
+//                reviewRepository.save(review);
+//            }
+//            product.setIsDeleted(false);
+//            product.setDateDeleted(null);
+//            productRepository.save(product);
+//        }
+//        category.setIsDeleted(false);
+//        category.setDateDeleted(null);
+//        categoryRepository.save(category);
+//        return ResponseEntity.status(HttpStatus.OK).body(new CRUDCategoryResponse(
+//                category.getCateId(),
+//                category.getCateName(),
+//                category.getCateImg(),
+//                category.getIsDeleted(),
+//                category.getDateCreated(),
+//                category.getDateUpdated(),
+//                category.getDateDeleted()));
+//    }
+@Transactional
+public ResponseEntity<?> enableCategory(int cateId) {
+    Category category = categoryRepository.findByCateId(cateId);
+    if (category == null) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Category not found");
+    }
+    if (!category.getIsDeleted()) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Category already enabled");
+    }
+
+    // Fetch all products in the category
+    List<Product> productList = productRepository.findByCategory_CateId(cateId);
+    if (!productList.isEmpty()) {
+        // Fetch all product IDs
+        List<Integer> productIds = productList.stream()
+                .map(Product::getProId)
+                .toList();
+
+        // Fetch all variants for products
+        List<ProductVariants> productVariants = productVariantsRepository.findByProduct_ProIdIn(productIds);
+        if (!productVariants.isEmpty()) {
+            // Batch update variants
+            productVariants.forEach(variant -> {
+                variant.setIsDeleted(false);
+                variant.setDateDeleted(null);
+            });
+            productVariantsRepository.saveAll(productVariants);
+
+            // Fetch and batch update favourite items
+            List<FavouriteItem> favouriteItems = favouriteItemRepository.findByProductVariantsIn(productVariants);
+            if (!favouriteItems.isEmpty()) {
+                favouriteItems.forEach(item -> {
+                    item.setIsDeleted(false);
+                    item.setDateDeleted(null);
+                });
+                favouriteItemRepository.saveAll(favouriteItems);
             }
-            List<Review> reviews = reviewRepository.findAllByProduct_ProId(product.getProId());
-            for(Review review: reviews)
-            {
+
+            // Fetch and batch update cart items
+            List<CartItem> cartItems = cartItemRepository.findByProductVariantsIn(productVariants);
+            if (!cartItems.isEmpty()) {
+                cartItems.forEach(item -> {
+                    item.setIsDeleted(false);
+                    item.setDateDeleted(null);
+                });
+                cartItemRepository.saveAll(cartItems);
+            }
+        }
+
+        // Recalculate cart totals
+        List<Cart> carts = cartRepository.findAll();
+        carts.forEach(cart -> {
+            List<CartItem> activeCartItems = cartItemRepository.findByCart_CartIdAndIsDeletedFalse(cart.getCartId());
+            double total = activeCartItems.stream().mapToDouble(CartItem::getTotalPrice).sum();
+            int quantity = activeCartItems.stream().mapToInt(CartItem::getQuantity).sum();
+
+            cart.setTotalPrice(total);
+            cart.setTotalProduct(quantity);
+        });
+        cartRepository.saveAll(carts);
+
+        // Batch update reviews
+        List<Review> reviews = reviewRepository.findAllByProduct_ProIdIn(productIds);
+        if (!reviews.isEmpty()) {
+            reviews.forEach(review -> {
                 review.setIsDeleted(false);
                 review.setDateDeleted(null);
-                reviewRepository.save(review);
-            }
+            });
+            reviewRepository.saveAll(reviews);
+        }
+
+        // Batch update products
+        productList.forEach(product -> {
             product.setIsDeleted(false);
             product.setDateDeleted(null);
-            productRepository.save(product);
-        }
-        category.setIsDeleted(false);
-        category.setDateDeleted(null);
-        categoryRepository.save(category);
-        return ResponseEntity.status(HttpStatus.OK).body(new CRUDCategoryResponse(
-                category.getCateId(),
-                category.getCateName(),
-                category.getCateImg(),
-                category.getIsDeleted(),
-                category.getDateCreated(),
-                category.getDateUpdated(),
-                category.getDateDeleted()));
+        });
+        productRepository.saveAll(productList);
     }
+
+    // Update category
+    category.setIsDeleted(false);
+    category.setDateDeleted(null);
+    categoryRepository.save(category);
+
+    // Return response
+    return ResponseEntity.status(HttpStatus.OK).body(new CRUDCategoryResponse(
+            category.getCateId(),
+            category.getCateName(),
+            category.getCateImg(),
+            category.getIsDeleted(),
+            category.getDateCreated(),
+            category.getDateUpdated(),
+            category.getDateDeleted()
+    ));
+}
+
 }
