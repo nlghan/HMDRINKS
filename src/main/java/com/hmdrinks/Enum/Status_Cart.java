@@ -6,5 +6,6 @@ import lombok.Getter;
 public enum Status_Cart {
     COMPLETED,
     NEW,
-    RESTORE
+    RESTORE,
+    COMPLETED_PAUSE
 }

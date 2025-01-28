@@ -2,6 +2,7 @@ package com.hmdrinks.Service;
 import com.hmdrinks.Entity.*;
 import com.hmdrinks.Enum.*;
 import com.hmdrinks.Repository.*;
+import com.hmdrinks.Request.AddItemOrderConfirmRequest;
 import com.hmdrinks.Request.CreateOrdersReq;
 import com.hmdrinks.Response.*;
 import com.hmdrinks.SupportFunction.DistanceAndDuration;
@@ -236,6 +237,28 @@ public class OrdersService {
         return ResponseEntity.status(HttpStatus.OK).body("Order has been canceled");
     }
 
+
+    @Transactional
+    public ResponseEntity<?> confirmTemporarilyPauseOrder(int orderId) {
+        Orders order = orderRepository.findByOrderIdAndIsDeletedFalse(orderId);
+        if (order == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Not found order");
+        }
+        if (order.getStatus() != Status_Order.WAITING)
+        {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Order already in use");
+        }
+        Cart cart_check = order.getOrderItem().getCart();
+        if (cart_check.getStatus() == Status_Cart.COMPLETED_PAUSE) {
+            order.setStatus(Status_Order.CONFIRMED);
+            orderRepository.save(order);
+            cart_check.setStatus(Status_Cart.COMPLETED);
+            cartRepository.save(cart_check);
+        }
+        return ResponseEntity.status(HttpStatus.OK).body("Confirm order success");
+    }
+
+    @Transactional
     public ResponseEntity<?> confirmOrder(int orderId) {
         Orders order = orderRepository.findByOrderIdAndIsDeletedFalse(orderId);
         if (order == null) {
@@ -245,7 +268,8 @@ public class OrdersService {
         {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Order already in use");
         }
-        if (Duration.between(order.getOrderDate(), LocalDateTime.now()).toMinutes() > 5) {
+        Cart cart_check = order.getOrderItem().getCart();
+        if (Duration.between(order.getOrderDate(), LocalDateTime.now()).toMinutes() > 5 && cart_check.getStatus() == Status_Cart.COMPLETED) {
             order.setStatus(Status_Order.CANCELLED);
             orderRepository.save(order);
             if(order.getVoucher() != null)
@@ -267,9 +291,7 @@ public class OrdersService {
             }
 
             return ResponseEntity.status(HttpStatus.OK).body("Order has been canceled due to timeout");
-        }
-        else
-        {
+        } else if (cart_check.getStatus() == Status_Cart.COMPLETED) {
             order.setStatus(Status_Order.CONFIRMED);
             orderRepository.save(order);
         }
@@ -1286,5 +1308,24 @@ public class OrdersService {
                 newCart.getUser().getUserId(),
                 newCart.getStatus()
         ));
+    }
+
+    @Transactional
+    public ResponseEntity<?> restoreAddItemOrder(AddItemOrderConfirmRequest req) {
+        Orders orders = orderRepository.findByOrderIdAndUserUserIdAndIsDeletedFalse(req.getOrderId(),req.getUserId());
+        if (orders == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Order not found");
+        }
+        if(orders.getStatus() != Status_Order.WAITING)
+        {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Order is not waiting");
+        }
+        Cart cart = orders.getOrderItem().getCart();
+        if(cart != null && cart.getStatus() == Status_Cart.COMPLETED)
+        {
+            cart.setStatus(Status_Cart.COMPLETED_PAUSE);
+            cartRepository.save(cart);
+        }
+        return ResponseEntity.ok("Success");
     }
 }

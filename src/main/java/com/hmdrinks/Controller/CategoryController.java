@@ -2,6 +2,7 @@ package com.hmdrinks.Controller;
 
 import com.hmdrinks.Request.CRUDCategoryRequest;
 import com.hmdrinks.Request.CreateCategoryRequest;
+import com.hmdrinks.Request.EnableCategoryRequest;
 import com.hmdrinks.Request.IdReq;
 import com.hmdrinks.Response.*;
 import com.hmdrinks.Service.CategoryService;
@@ -11,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 @RestController
 @SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/api/cate")
@@ -54,8 +54,8 @@ public class CategoryController {
     }
 
     @PutMapping(value = "/enable")
-    public ResponseEntity<?> enableCategory(@RequestBody IdReq req, HttpServletRequest httpRequest) {
-        return  categoryService.enableCategory(req.getId());
+    public ResponseEntity<?> enableCategory(@RequestBody EnableCategoryRequest req, HttpServletRequest httpRequest) throws Exception {
+        return  categoryService.enableCategory(req.getId(),req.getIsCancel());
     }
 
     @PutMapping(value = "/disable")

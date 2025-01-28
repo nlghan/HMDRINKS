@@ -1,10 +1,7 @@
 package com.hmdrinks.Controller;
 
 import com.hmdrinks.Enum.Status_Order;
-import com.hmdrinks.Request.ConfirmCancelOrderReq;
-import com.hmdrinks.Request.CreateOrdersReq;
-import com.hmdrinks.Request.CreatePaymentReq;
-import com.hmdrinks.Request.IdReq;
+import com.hmdrinks.Request.*;
 import com.hmdrinks.Response.CancelReasonReq;
 import com.hmdrinks.Service.GenerateInvoiceService;
 import com.hmdrinks.Service.OrdersService;
@@ -42,6 +39,15 @@ public class OrdersController {
         return ResponseEntity.ok(ordersService.addOrder(req));
     }
 
+    @PostMapping(value = "/pause_order")
+    public ResponseEntity<?> pauseOrder(@RequestBody AddItemOrderConfirmRequest req, HttpServletRequest httpRequest) {
+        ResponseEntity<?> authResponse = supportFunction.checkUserAuthorization(httpRequest, req.getUserId());
+        if (!authResponse.getStatusCode().equals(HttpStatus.OK)) {
+            return authResponse;
+        }
+        return ResponseEntity.ok(ordersService.restoreAddItemOrder(req));
+    }
+
     @PostMapping(value = "/restore")
     public ResponseEntity<?> restoreOrder(@RequestBody ConfirmCancelOrderReq  req,HttpServletRequest httpRequest) {
         ResponseEntity<?> authResponse = supportFunction.checkUserAuthorization(httpRequest, req.getUserId());
@@ -53,6 +59,15 @@ public class OrdersController {
 
     @PostMapping(value = "/confirm")
     public ResponseEntity<?> createVoucher1(@RequestBody ConfirmCancelOrderReq req,HttpServletRequest httpRequest){
+        ResponseEntity<?> authResponse = supportFunction.checkUserAuthorization(httpRequest, req.getUserId());
+        if (!authResponse.getStatusCode().equals(HttpStatus.OK)) {
+            return authResponse;
+        }
+        return ResponseEntity.ok(ordersService.confirmOrder(req.getOrderId()));
+    }
+
+    @PostMapping(value = "/confirm_order_pause")
+    public ResponseEntity<?> confirm_order_pause(@RequestBody ConfirmCancelOrderReq req,HttpServletRequest httpRequest){
         ResponseEntity<?> authResponse = supportFunction.checkUserAuthorization(httpRequest, req.getUserId());
         if (!authResponse.getStatusCode().equals(HttpStatus.OK)) {
             return authResponse;

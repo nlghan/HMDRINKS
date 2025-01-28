@@ -16,7 +16,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.sql.DriverManager.println;
 
@@ -32,6 +35,10 @@ public class CartItemService {
     private CartRepository cartRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private OrderItemRepository orderItemRepository;
+    @Autowired
+    private OrderRepository orderRepository;
 
     @Transactional
     public ResponseEntity<?> insertCartItem(InsertItemToCart req)
@@ -51,11 +58,11 @@ public class CartItemService {
         {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("production size not exists");
         }
-        Cart cart1 = cartRepository.findByUserUserIdAndStatus(user.getUserId(), Status_Cart.NEW);
-        if(cart1 == null)
-        {
+        Cart cart1 = cartRepository.findByCartId(req.getCartId());
+        if (cart1.getStatus() != Status_Cart.NEW && cart1.getStatus() != Status_Cart.COMPLETED_PAUSE) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cart Not Found");
         }
+
         Cart cart = cartRepository.findByCartId(req.getCartId());
         if(cart == null)
         {
@@ -79,17 +86,40 @@ public class CartItemService {
             cartItem.setProductVariants(productVariants);
             cartItem.setTotalPrice(totalPrice);
             cartItemRepository.save(cartItem);
-            List<CartItem> cartItemList = cartItemRepository.findByCart_CartId(req.getCartId());
-            Double Price = 0.0;
-            Integer Quantity=0;
-            for(CartItem cartItem2: cartItemList)
-            {
-                Price = Price + Double.valueOf(cartItem2.getTotalPrice());
-                Quantity = Quantity + cartItem2.getQuantity();
-            }
-            cart.setTotalProduct(Quantity);
-            cart.setTotalPrice(Price);
+            List<CartItem> cartItemList2 = cart.getCartItems();
+            AtomicReference<Double> totalPrice1 = new AtomicReference<>(0.0);
+            AtomicInteger totalQuantity = new AtomicInteger(0);
+
+            cartItemList2.forEach(cartItem_update -> {
+                // Lấy giá và số lượng từ từng CartItem
+                double price = cartItem_update.getTotalPrice();       // Giá của sản phẩm
+                int quantity = cartItem_update.getQuantity();   // Số lượng sản phẩm
+
+                // Tính tổng giá và tổng số lượng
+                totalPrice1.updateAndGet(v -> v + (price * quantity));
+                totalQuantity.addAndGet(quantity);
+            });
+
+            double finalTotalPrice = totalPrice1.get();
+            int finalTotalQuantity = totalQuantity.get();
+            cart.setTotalProduct(finalTotalQuantity);
+            cart.setTotalPrice(finalTotalPrice);
             cartRepository.save(cart);
+
+            OrderItem orderItem = cart.getOrderItem();
+            orderItem.setTotalPrice(finalTotalPrice);
+            orderItem.setQuantity(finalTotalQuantity);
+            orderItem.setCart(cart);
+            orderItem.setDateUpdated(LocalDateTime.now());
+            orderItemRepository.save(orderItem);
+
+
+            Orders order = orderItem.getOrder();
+            order.setTotalPrice(finalTotalPrice);
+            order.setDateUpdated(LocalDateTime.now());
+            orderRepository.save(order);
+
+
             return ResponseEntity.status(HttpStatus.OK).body(new CRUDCartItemResponse(
                     cartItem.getCartItemId(),
                     cartItem.getProductVariants().getProduct().getProId(),
@@ -122,6 +152,21 @@ public class CartItemService {
             cart.setTotalProduct(Quantity);
             cart.setTotalPrice(Price);
             cartRepository.save(cart);
+
+
+
+            OrderItem orderItem = cart.getOrderItem();
+            orderItem.setTotalPrice(Price);
+            orderItem.setQuantity(Quantity);
+            orderItem.setCart(cart);
+            orderItem.setDateUpdated(LocalDateTime.now());
+            orderItemRepository.save(orderItem);
+
+
+            Orders order = orderItem.getOrder();
+            order.setTotalPrice(Price);
+            order.setDateUpdated(LocalDateTime.now());
+            orderRepository.save(order);
             return ResponseEntity.status(HttpStatus.OK).body(new CRUDCartItemResponse(
                     cartItem1.getCartItemId(),
                     cartItem1.getProductVariants().getProduct().getProId(),
@@ -134,6 +179,7 @@ public class CartItemService {
         }
     }
 
+    @Transactional
     public ResponseEntity<?> increaseCartItemQuantity(IncreaseDecreaseItemQuantityReq req)
     {
         CartItem cartItem = cartItemRepository.findByCartItemId(req.getCartItemId());
@@ -174,6 +220,23 @@ public class CartItemService {
         cart.setTotalProduct(Quantity);
         cart.setTotalPrice(Price);
         cartRepository.save(cart);
+        if(cart.getStatus() == Status_Cart.COMPLETED_PAUSE)
+        {
+            OrderItem orderItem = cart.getOrderItem();
+            orderItem.setTotalPrice(Price);
+            orderItem.setQuantity(Quantity);
+            orderItem.setCart(cart);
+            orderItem.setDateUpdated(LocalDateTime.now());
+            orderItemRepository.save(orderItem);
+
+
+            Orders order = orderItem.getOrder();
+            order.setTotalPrice(Price);
+            order.setDateUpdated(LocalDateTime.now());
+            orderRepository.save(order);
+        }
+
+
         return ResponseEntity.status(HttpStatus.OK).body(new IncreaseDecreaseItemQuantityResponse(
                 Present_Quantity,
                 Present_TotalPrice
@@ -220,6 +283,21 @@ public class CartItemService {
         cart.setTotalProduct(Quantity);
         cart.setTotalPrice(Price);
         cartRepository.save(cart);
+        if(cart.getStatus() == Status_Cart.COMPLETED_PAUSE)
+        {
+            OrderItem orderItem = cart.getOrderItem();
+            orderItem.setTotalPrice(Price);
+            orderItem.setQuantity(Quantity);
+            orderItem.setCart(cart);
+            orderItem.setDateUpdated(LocalDateTime.now());
+            orderItemRepository.save(orderItem);
+
+
+            Orders order = orderItem.getOrder();
+            order.setTotalPrice(Price);
+            order.setDateUpdated(LocalDateTime.now());
+            orderRepository.save(order);
+        }
         return ResponseEntity.status(HttpStatus.OK).body(new IncreaseDecreaseItemQuantityResponse(
                 Present_Quantity,
                 Present_TotalPrice
@@ -260,6 +338,21 @@ public class CartItemService {
         cart.setTotalProduct(Quantity);
         cart.setTotalPrice(Price);
         cartRepository.save(cart);
+        if(cart.getStatus() == Status_Cart.COMPLETED_PAUSE)
+        {
+            OrderItem orderItem = cart.getOrderItem();
+            orderItem.setTotalPrice(Price);
+            orderItem.setQuantity(Quantity);
+            orderItem.setCart(cart);
+            orderItem.setDateUpdated(LocalDateTime.now());
+            orderItemRepository.save(orderItem);
+
+
+            Orders order = orderItem.getOrder();
+            order.setTotalPrice(Price);
+            order.setDateUpdated(LocalDateTime.now());
+            orderRepository.save(order);
+        }
         return ResponseEntity.status(HttpStatus.OK).body(new ChangeSizeItemResponse(
                  req.getSize(),
                  Quantity,
@@ -316,6 +409,22 @@ public class CartItemService {
             cart.setStatus(Status_Cart.COMPLETED);
             cartRepository.save(cart);
         }
+
+        if(cart.getStatus() == Status_Cart.COMPLETED_PAUSE)
+        {
+            OrderItem orderItem = cart.getOrderItem();
+            orderItem.setTotalPrice(Price);
+            orderItem.setQuantity(Quantity);
+            orderItem.setCart(cart);
+            orderItem.setDateUpdated(LocalDateTime.now());
+            orderItemRepository.save(orderItem);
+
+
+            Orders order = orderItem.getOrder();
+            order.setTotalPrice(Price);
+            order.setDateUpdated(LocalDateTime.now());
+            orderRepository.save(order);
+        }
         return ResponseEntity.status(HttpStatus.OK).body(new IncreaseDecreaseItemQuantityResponse(
                 Present_Quantity,
                 Present_TotalPrice
@@ -350,6 +459,21 @@ public class CartItemService {
             cart.setStatus(Status_Cart.COMPLETED);
             cartRepository.save(cart);
         }
+        if(cart.getStatus() == Status_Cart.COMPLETED_PAUSE)
+        {
+            OrderItem orderItem = cart.getOrderItem();
+            orderItem.setTotalPrice(Price);
+            orderItem.setQuantity(Quantity);
+            orderItem.setCart(cart);
+            orderItem.setDateUpdated(LocalDateTime.now());
+            orderItemRepository.save(orderItem);
+
+
+            Orders order = orderItem.getOrder();
+            order.setTotalPrice(Price);
+            order.setDateUpdated(LocalDateTime.now());
+            orderRepository.save(order);
+        }
         return ResponseEntity.status(HttpStatus.OK).body(new DeleteCartItemResponse(
                 "Delete item success"
         ));
@@ -374,12 +498,11 @@ public class CartItemService {
             ));
         }
 
-        ///
         Cart cart = cartRepository.findByCartIdAndStatus(req.getCartId(),Status_Cart.NEW);
-        if(cart == null)
-        {
+        if (cart.getStatus() != Status_Cart.NEW && cart.getStatus() != Status_Cart.COMPLETED_PAUSE) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cart Not Found");
         }
+
         List<CartItem> cartItemList = cartItemRepository.findByCart_CartId(req.getCartId());
         for(CartItem cartItem2: cartItemList)
         {
@@ -388,6 +511,21 @@ public class CartItemService {
         cart.setTotalProduct(0);
         cart.setTotalPrice(0);
         cartRepository.save(cart);
+        if(cart.getStatus() == Status_Cart.COMPLETED_PAUSE)
+        {
+            OrderItem orderItem = cart.getOrderItem();
+            orderItem.setTotalPrice(0.0);
+            orderItem.setQuantity(0);
+            orderItem.setCart(cart);
+            orderItem.setDateUpdated(LocalDateTime.now());
+            orderItemRepository.save(orderItem);
+
+
+            Orders order = orderItem.getOrder();
+            order.setTotalPrice(0.0);
+            order.setDateUpdated(LocalDateTime.now());
+            orderRepository.save(order);
+        }
         return ResponseEntity.status(HttpStatus.OK).body(new DeleteCartItemResponse(
                 "Delete all item success"
         ));
