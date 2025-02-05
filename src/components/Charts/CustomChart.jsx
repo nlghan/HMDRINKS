@@ -45,14 +45,19 @@ const isLeapYear = (year) => {
   return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
 };
 
-const dataset = (month, year, successfulShipments, paymentAmounts) => {
-  const daysInMonth = typeof monthData[month] === 'function' ? monthData[month](year) : monthData[month];
-  return Array.from({ length: daysInMonth }, (_, index) => ({
-    day: index + 1,
+const dataset = (labels, shipmentCounts, paymentAmounts, labelType) => {
+  if (!Array.isArray(labels)) {
+    console.error('labels is not an array:', labels);
+    return [];
+  }
+
+  return labels.map((label, index) => ({
+    [labelType]: label,
     precip: paymentAmounts[index] || 0,
-    max: index < successfulShipments.length ? successfulShipments[index] : 0,
+    max: shipmentCounts[index] || 0,
   }));
 };
+
 
 const series = [
   { type: 'line', dataKey: 'max', color: '#fe5f55' },
@@ -65,8 +70,12 @@ export default function CustomChart() {
   const [reverseRight, setReverseRight] = React.useState(false);
   const [selectedMonth, setSelectedMonth] = React.useState('Tháng 1');
   const [selectedYear, setSelectedYear] = React.useState(new Date().getFullYear());
-  const [data, setData] = React.useState(dataset('Tháng 1', selectedYear, [], []));
+  const [data, setData] = React.useState([]);
   const [successfulShipments, setSuccessfulShipments] = React.useState([]);
+  const [chartType, setChartType] = React.useState('daily');
+  const [quarterlyData, setQuarterlyData] = React.useState([]);
+  const [monthlyData, setMonthlyData] = React.useState([]);
+
 
   // Get Cookie by name
   const getCookie = (name) => {
@@ -77,24 +86,13 @@ export default function CustomChart() {
   const fetchShipments = async (month, year) => {
     try {
       const token = getCookie('access_token');
-      if (!token) {
-        console.error("Không tìm thấy token xác thực.");
-        return;
-      }
-
-      // Check if month is valid
-      if (!monthData[month]) {
-        console.error("Tháng không hợp lệ:", month);
-        return;
-      }
-
       const daysInMonth = typeof monthData[month] === 'function' ? monthData[month](year) : monthData[month];
+
       const shipmentCounts = Array(daysInMonth).fill(0);
       const paymentAmounts = Array(daysInMonth).fill(0);
       let totalPages = 1;
       let currentPage = 1;
 
-      // Fetch shipments
       while (currentPage <= totalPages) {
         const response = await axiosInstance.get('http://localhost:1010/api/shipment/view/listByStatus', {
           params: {
@@ -108,53 +106,149 @@ export default function CustomChart() {
         });
 
         console.log('Dữ liệu shipment:', response.data);
+
+      const shipments = response.data.listShipment;
+
+      for (const shipment of shipments) {
+        const date = new Date(shipment.dateCreated);
+        if (date.getFullYear() === year && date.getMonth() + 1 === parseInt(month.split(' ')[1])) {
+          const dayIndex = date.getDate() - 1;
+          shipmentCounts[dayIndex]++;
+
+          if (shipment.paymentId) {
+            const paymentResponse = await axiosInstance.get(`http://localhost:1010/api/payment/view/${shipment.paymentId}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            paymentAmounts[dayIndex] += paymentResponse.data.amount;
+          }
+        }
+      }
+      currentPage++;
+    }
+      setSuccessfulShipments(shipmentCounts);
+      setData(dataset(Array.from({ length: daysInMonth }, (_, i) => i + 1), shipmentCounts, paymentAmounts, 'day'));
+    } catch (error) {
+      console.error('Error fetching shipments:', error);
+    }
+  };
+
+
+  const handleMonthChange = (e) => setSelectedMonth(e.target.value);
+  const handleYearChange = (e) => setSelectedYear(e.target.value);
+  const handleChartTypeChange = (e) => setChartType(e.target.value);
+
+  const fetchMonthlyData = async (year) => {
+    try {
+      const token = getCookie('access_token');
+      const shipmentCounts = Array(12).fill(0);
+      const paymentAmounts = Array(12).fill(0);
+      let totalPages = 1;
+      let currentPage = 1;
+  
+      while (currentPage <= totalPages) {
+        const response = await axiosInstance.get('http://localhost:1010/api/shipment/view/listByStatus', {
+          params: { page: currentPage, limit: 100, status: 'SUCCESS' },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+  
         const shipments = response.data.listShipment;
-
-        totalPages = response.data.totalPages || 1;
-
+  
         for (const shipment of shipments) {
           const date = new Date(shipment.dateCreated);
-          if (date.getMonth() === new Date(`${month} 1, ${year}`).getMonth() && date.getFullYear() === year) {
-            shipmentCounts[date.getDate() - 1] += 1;
-
-            // Fetch payment details for each shipment
-            const paymentId = shipment.paymentId; // Assuming paymentId is available in shipment
-            if (paymentId) {
-              await fetchPaymentDetails(paymentId, date.getDate() - 1, paymentAmounts);
+          if (date.getFullYear() === year) {
+            const monthIndex = date.getMonth();
+            shipmentCounts[monthIndex]++;
+            
+            if (shipment.paymentId) {
+              const paymentResponse = await axiosInstance.get(`http://localhost:1010/api/payment/view/${shipment.paymentId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              paymentAmounts[monthIndex] += paymentResponse.data.amount;
             }
           }
         }
-
         currentPage++;
       }
-
       setSuccessfulShipments(shipmentCounts);
-      setData(dataset(month, year, shipmentCounts, paymentAmounts));
+      setMonthlyData(
+        Array.from({ length: 12 }, (_, i) => ({
+          month: `Tháng ${i + 1}`,
+          orders: shipmentCounts[i],
+          revenue: paymentAmounts[i],
+        }))
+      );
+      setData(dataset(
+        Object.keys(monthData),
+        shipmentCounts,
+        paymentAmounts,
+        'month'
+      ));
     } catch (error) {
-      console.error('Lỗi khi gọi API:', error);
+      console.error('Error fetching monthly data:', error);
     }
   };
-
-  // Function to fetch payment details
-  const fetchPaymentDetails = async (paymentId, dayIndex, paymentAmounts) => {
+  
+  const fetchQuarterlyData = async (year) => {
     try {
       const token = getCookie('access_token');
-      const response = await axiosInstance.get(`http://localhost:1010/api/payment/view/${paymentId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.status === 200) {
-        const paymentAmount = response.data.amount; // Assuming the response contains the amount
-        console.log('payment:', paymentAmount);
-        paymentAmounts[dayIndex] += paymentAmount; // Accumulate the payment amount for the corresponding day
-        console.log('Updated paymentAmounts:', paymentAmounts);
+      const shipmentCounts = Array(4).fill(0); // 4 quý
+      const paymentAmounts = Array(4).fill(0);
+      let totalPages = 1;
+      let currentPage = 1;
+  
+      while (currentPage <= totalPages) {
+        const response = await axiosInstance.get('http://localhost:1010/api/shipment/view/listByStatus', {
+          params: { page: currentPage, limit: 100, status: 'SUCCESS' },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+  
+        const shipments = response.data.listShipment;
+  
+        for (const shipment of shipments) {
+          const date = new Date(shipment.dateCreated);
+          if (date.getFullYear() === year) {
+            const quarterIndex = Math.floor(date.getMonth() / 3); // 0 -> Q1, 1 -> Q2, 2 -> Q3, 3 -> Q4
+            shipmentCounts[quarterIndex]++;
+            
+            if (shipment.paymentId) {
+              const paymentResponse = await axiosInstance.get(`http://localhost:1010/api/payment/view/${shipment.paymentId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              paymentAmounts[quarterIndex] += paymentResponse.data.amount;
+            }
+          }
+        }
+        currentPage++;
       }
+      setSuccessfulShipments(shipmentCounts);
+      setQuarterlyData(
+        ['Quý 1', 'Quý 2', 'Quý 3', 'Quý 4'].map((quarter, i) => ({
+          quarter,
+          orders: shipmentCounts[i],
+          revenue: paymentAmounts[i],
+        }))
+      );
+      setData(dataset(
+        ['Quý 1', 'Quý 2', 'Quý 3', 'Quý 4'],
+        shipmentCounts,
+        paymentAmounts,
+        'quarter'
+      ));
     } catch (error) {
-      console.error(`Lỗi khi gọi API cho paymentId ${paymentId}:`, error);
+      console.error('Error fetching quarterly data:', error);
     }
   };
+  
+  React.useEffect(() => {
+    if (chartType === 'daily') {
+      fetchShipments(selectedMonth, selectedYear);
+    } else if (chartType === 'monthly') {
+      fetchMonthlyData(selectedYear);
+    } else if (chartType === 'quarterly') {
+      fetchQuarterlyData(selectedYear);
+    }
+  }, [selectedMonth, selectedYear, chartType]);
+  
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -170,168 +264,175 @@ export default function CustomChart() {
       console.error('chartElement không tồn tại.');
       return;
     }
-
+  
     try {
+      const dataToUse = chartType === 'monthly' ? monthlyData : chartType === 'quarterly' ? quarterlyData : new Array(12).fill({ orders: 0, revenue: 0 });
+  
       const dataUrl = await domtoimage.toPng(chartElement);
-
-      // Tạo file PDF
       const pdf = new jsPDF();
-
-      // Sử dụng font đã được thêm qua sự kiện addFonts
+  
       pdf.setFont('Roboto-Bold', 'bold');
-
-      // Tiêu đề chính
       pdf.setFontSize(18);
-      pdf.setTextColor('#1d6587'); // Màu chữ xám đậm
-      pdf.text('Báo cáo thống kê doanh thu', 105, 20, { align: 'center' }); // Căn giữa
-
-      // Thông tin tháng/năm
+      pdf.setTextColor('#1d6587');
+      pdf.text('Báo cáo thống kê doanh thu', 105, 20, { align: 'center' });
+  
       pdf.setFont('Roboto-Regular', 'normal');
       pdf.setFontSize(12);
-      pdf.text(`Tháng: ${selectedMonth}`, 20, 30);
-      pdf.text(`Năm: ${selectedYear}`, 20, 40);
-
-      // Kiểm tra kích thước ảnh
+      if (chartType === 'daily') {
+        pdf.text(`Tháng: ${selectedMonth}`, 20, 30);
+        pdf.text(`Năm: ${selectedYear}`, 20, 40);
+      } else {
+        pdf.text(`Năm: ${selectedYear}`, 20, 30);
+      }
+  
       const imgWidth = 190;
       const imgHeight = (chartElement.offsetHeight * imgWidth) / chartElement.offsetWidth;
-
-      // Thêm biểu đồ vào PDF
       pdf.addImage(dataUrl, 'PNG', 10, 50, imgWidth, imgHeight);
-
-      // Tạo danh sách ngày trong tháng
-      const daysInMonth = typeof monthData[selectedMonth] === 'function'
-        ? monthData[selectedMonth](selectedYear)
-        : monthData[selectedMonth];
-      const dates = Array.from({ length: daysInMonth }, (_, i) => {
-        const day = i + 1;
-        const formattedDate = `${day < 10 ? '0' + day : day}/${selectedMonth < 10 ? '0' + selectedMonth : selectedMonth}/${selectedYear}`;
-        return formattedDate;
-      });
-
-      // Tạo dữ liệu bảng
-      const tableData = dates.map((date, index) => [
-        index + 1, // Số thứ tự
-        date, // Ngày/Tháng/Năm
-        successfulShipments[index] || 0, // Số lượng đơn hàng
-        data[index]?.precip ? `${formatPrice(data[index].precip)} VND` : '', // Giá trị đơn hàng
-      ]);
-
-      // Thêm trang mới
+  
       pdf.addPage();
       pdf.setFont('Roboto-Bold', 'bold');
       pdf.setFontSize(18);
-      pdf.setTextColor('#1d6587'); // Màu chữ xám đậm
+      pdf.setTextColor('#1d6587');
       pdf.text('Dữ liệu chi tiết', 105, 20, { align: 'center' });
-
-      // Tùy chỉnh bảng
+  
+      let tableData = [];
+      if (chartType === 'monthly') {
+        tableData = Array.from({ length: 12 }, (_, i) => [
+          i + 1,
+          `Tháng ${i + 1}`,
+          dataToUse[i]?.orders || 0,
+          dataToUse[i]?.revenue ? `${formatPrice(dataToUse[i].revenue)} VND` : '',
+        ]);
+      } else if (chartType === 'monthly') {
+        tableData = Array.from({ length: 4 }, (_, i) => [
+          i + 1,
+          `Quý ${i + 1}`,
+          dataToUse[i]?.orders || 0,
+          dataToUse[i]?.revenue ? `${formatPrice(dataToUse[i].revenue)} VND` : '',
+        ]);
+      } else if (chartType === 'daily') {
+        const daysInMonth = typeof monthData[selectedMonth] === 'function'
+          ? monthData[selectedMonth](selectedYear)
+          : monthData[selectedMonth];
+  
+        const dates = Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
+          return `${day < 10 ? '0' + day : day}/${selectedMonth < 10 ? '0' + selectedMonth : selectedMonth}/${selectedYear}`;
+        });
+  
+        tableData = dates.map((date, index) => [
+          index + 1,
+          date,
+          successfulShipments[index] || 0,
+          data[index]?.precip ? `${formatPrice(data[index].precip)} VND` : '',
+        ]);
+      }
+  
       pdf.autoTable({
-        head: [['STT', 'Ngày', 'Số đơn hàng', 'Doanh thu']],
+        head: [['STT', chartType === 'daily' ? 'Ngày' : (chartType === 'monthly' ? 'Tháng' : 'Quý'), 'Số đơn hàng', 'Doanh thu']],
         body: tableData,
         startY: 30,
-        theme: 'striped', // Chủ đề: kẻ sọc
+        theme: 'striped',
         styles: {
-          font: 'Roboto-Regular', // Font trong bảng
-          fontSize: 10, // Cỡ chữ trong bảng
-          textColor: '#333333', // Màu chữ trong bảng
-          halign: 'center', // Căn giữa nội dung
-          valign: 'middle', // Căn giữa dọc
-          lineColor: [44, 62, 80], // Màu đường viền
-          lineWidth: 0.1, // Độ dày đường viền
+          font: 'Roboto-Regular',
+          fontSize: 10,
+          textColor: '#333333',
+          halign: 'center',
+          valign: 'middle',
+          lineColor: [44, 62, 80],
+          lineWidth: 0.1,
         },
         headStyles: {
-          fillColor: [230, 247, 255], // Màu xanh nhạt cho nền tiêu đề
-          textColor: '#333333', // Màu chữ đậm
-          fontSize: 11, // Kích thước font trong đầu bảng
-          fontStyle: 'bold', // Kiểu chữ đậm cho tiêu đề
-          halign: 'center', // Căn giữa tiêu đề bảng
+          fillColor: [230, 247, 255],
+          textColor: '#333333',
+          fontSize: 11,
+          fontStyle: 'bold',
+          halign: 'center',
         },
         bodyStyles: {
-          fillColor: [255, 255, 255], // Nền trắng cho các ô dữ liệu
-          textColor: '#333333', // Màu chữ trong bảng
-          halign: 'center', // Căn giữa dữ liệu trong bảng
+          fillColor: [255, 255, 255],
+          textColor: '#333333',
+          halign: 'center',
         },
         alternateRowStyles: {
-          fillColor: [230, 247, 255], // Màu xanh nhạt cho các dòng kẻ sọc
+          fillColor: [230, 247, 255],
         },
       });
-
-      // Thêm ngày giờ hiện tại vào cuối trang
+  
       const currentDate = new Date();
       const formattedDate = currentDate.toLocaleString('vi-VN', {
-        weekday: 'long', // Ngày trong tuần
-        year: 'numeric', // Năm
-        month: 'long', // Tháng
-        day: 'numeric', // Ngày
-        hour: 'numeric', // Giờ
-        minute: 'numeric', // Phút
-        second: 'numeric', // Giây
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
       });
-
-
+  
       pdf.setFont('Roboto-Regular', 'normal');
       pdf.setFontSize(10);
-      pdf.setTextColor('#555555'); // Màu xám nhẹ cho ngày giờ
+      pdf.setTextColor('#555555');
       pdf.text(`Xuất báo cáo: ${formattedDate}`, 105, pdf.internal.pageSize.height - 20, { align: 'center' });
-
-      // Lưu file PDF
-      pdf.save(`Bao_cao_${selectedMonth}_${selectedYear}.pdf`);
+  
+      if (chartType === 'daily') {
+        pdf.save(`Bao_cao_${selectedMonth}_${selectedYear}.pdf`);
+      } else if (chartType === 'monthly') {
+        pdf.save(`Bao_cao_theo_thang_${selectedYear}.pdf`);
+      } else if (chartType === 'quarterly') {
+        pdf.save(`Bao_cao_theo_quy_${selectedYear}.pdf`);
+      }
     } catch (error) {
       console.error('Lỗi khi xuất file PDF:', error);
     }
   };
-
-
-
-
-  React.useEffect(() => {
-    fetchShipments(selectedMonth, selectedYear);
-  }, [selectedMonth, selectedYear]);
-
-  const handleMonthChange = (event) => {
-    const month = event.target.value;
-    setSelectedMonth(month);
-    setData(dataset(month, selectedYear, successfulShipments, []));
-  };
-
-  const handleYearChange = (event) => {
-    const year = event.target.value;
-    setSelectedYear(year);
-    setData(dataset(selectedMonth, year, successfulShipments, []));
-  };
+  
 
   return (
     <Stack className="custom-chart" sx={{ width: '100%' }}>
       <div className="custom-chart-title">
-        Biểu đồ doanh thu các ngày trong tháng
-        <Select
-          value={selectedMonth}
-          onChange={handleMonthChange}
-          sx={{ marginLeft: 2 }}
-        >
-          {Object.keys(monthData).map((month) => (
-            <MenuItem key={month} value={month}>
-              {month}
-            </MenuItem>
-          ))}
+        <Select value={chartType} onChange={handleChartTypeChange} sx={{ marginRight: 2 }}>
+          <MenuItem value="daily">Biểu đồ doanh thu các ngày trong tháng</MenuItem>
+          <MenuItem value="monthly">Biểu đồ doanh thu các tháng trong năm</MenuItem>
+          <MenuItem value="quarterly">Biểu đồ doanh thu các quý trong năm</MenuItem>
         </Select>
-        <Select
-          value={selectedYear}
-          onChange={handleYearChange}
-          sx={{ marginLeft: 2 }}
-        >
-          {Array.from({ length: 10 }, (_, index) => new Date().getFullYear() - index).map((year) => (
-            <MenuItem key={year} value={year}>
-              {year}
-            </MenuItem>
-          ))}
-        </Select>
-        <Button
-          sx={{ marginLeft: 2 }}
-          onClick={handleExportPDF}
-        >
+
+
+        {chartType === 'daily' && (
+          <>
+            <Select value={selectedMonth} onChange={handleMonthChange} sx={{ marginLeft: 2 }}>
+              {Object.keys(monthData).map((month) => (
+                <MenuItem key={month} value={month}>{month}</MenuItem>
+              ))}
+            </Select>
+            <Select value={selectedYear} onChange={handleYearChange} sx={{ marginLeft: 2 }}>
+              {Array.from({ length: 10 }, (_, index) => new Date().getFullYear() - index).map((year) => (
+                <MenuItem key={year} value={year}>{year}</MenuItem>
+              ))}
+            </Select>
+          </>
+        )}
+
+        {chartType === 'monthly' && (
+          <Select value={selectedYear} onChange={handleYearChange} sx={{ marginLeft: 2 }}>
+            {Array.from({ length: 10 }, (_, index) => new Date().getFullYear() - index).map((year) => (
+              <MenuItem key={year} value={year}>{year}</MenuItem>
+            ))}
+          </Select>
+        )}
+
+        {chartType === 'quarterly' && (
+          <Select value={selectedYear} onChange={handleYearChange} sx={{ marginLeft: 2 }}>
+            {Array.from({ length: 10 }, (_, index) => new Date().getFullYear() - index).map((year) => (
+              <MenuItem key={year} value={year}>{year}</MenuItem>
+            ))}
+          </Select>
+        )}
+
+
+        <Button sx={{ marginLeft: 2 }} onClick={handleExportPDF}>
           Xuất PDF
         </Button>
-
       </div>
       <Stack direction="row">
         <FormControlLabel
@@ -364,8 +465,13 @@ export default function CustomChart() {
           series={series}
           xAxis={[{
             scaleType: 'band',
-            dataKey: 'day',
-            label: 'Các ngày trong tháng',
+            dataKey: chartType === 'daily' ? 'day' : chartType === 'monthly' ? 'month' : 'quarter',
+            label:
+              chartType === 'daily'
+                ? 'Các ngày trong tháng'
+                : chartType === 'monthly'
+                  ? 'Các tháng trong năm'
+                  : 'Các quý trong năm',
             reverse: reverseX,
           }]}
           yAxis={[
